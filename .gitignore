@@ -45,3 +45,6 @@
 
 # vscode
 .vscode/settings.json
+
+#IHP dir
+IHP-Open-PDK/*
