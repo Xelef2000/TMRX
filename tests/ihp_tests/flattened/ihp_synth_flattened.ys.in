@@ -6,19 +6,21 @@ proc; opt; write_verilog -noattr 02_opt.v
 techmap
 write_verilog -noattr 03_techmap.v
 
-stubnets
+tmrx
+write_verilog -noattr 04_tmrx.v
+
 
 flatten
-write_verilog -noattr 03.5_flattened.v
+write_verilog -noattr 05_flattened.v
 
 
 dfflibmap -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
-write_verilog -noattr 04_dff.v
+write_verilog -noattr 06_dff.v
 
 abc -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
-write_verilog -noattr 05_gates.v
+write_verilog -noattr 07_gates.v
 
 clean
-write_verilog -noattr 06_final.v
+write_verilog -noattr 08_final.v
 
 stat -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib

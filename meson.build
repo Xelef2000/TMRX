@@ -1,5 +1,5 @@
 project(
-  'stubnets',
+  'tmrx',
   'cpp',
   default_options: ['cpp_std=c++11']
 )
@@ -22,10 +22,10 @@ if not fs.is_dir(pdk_abs_path)
   )
 endif
 
-stubnets = custom_target(
-  'stubnets_so',
-  input: 'stubnets.cc',
-  output: 'stubnets.so',
+tmrx = custom_target(
+  'tmrx_so',
+  input: 'tmrx.cc',
+  output: 'tmrx.so',
   command: [
     yosys_config, '--exec', '--cxx', '--cxxflags', '--ldflags',
     '-shared', '-o', '@OUTPUT@', '@INPUT@', '--ldlibs'
@@ -33,7 +33,7 @@ stubnets = custom_target(
   build_by_default: true
 )
 
-plugin_path = stubnets.full_path()
+plugin_path = tmrx.full_path()
 
 
 subdir('tests/std_tests')
