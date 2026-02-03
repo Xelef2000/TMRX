@@ -10,6 +10,7 @@ configure_file(
   copy: true
 )
 
+
 current_dir = meson.current_build_dir()
 
 test('basic', yosys, 
@@ -39,10 +40,12 @@ synth_conf.set('PDK_ROOT', pdk_abs_path)
 
 foreach vfile : test_files
   script_name = vfile.replace('.v', '_synth.ys')
+  basename = vfile.replace('.v', '')
   
   file_conf = configuration_data()
   file_conf.set('PDK_ROOT', pdk_abs_path)
   file_conf.set('INPUT', vfile)
+  file_conf.set('BASENAME', basename)
   
   synth_script = configure_file(
     input: 'synth_template.ys.in',
@@ -50,8 +53,8 @@ foreach vfile : test_files
     configuration: file_conf
   )
   
-  test('synth_' + vfile.replace('.v', ''), yosys,
-    args: ['-ql', 'synth_' + vfile.replace('.v', '.log'), '-m', plugin_path, '-s', synth_script],
+  test('synth_' + basename, yosys,
+    args: ['-ql', 'synth_' + basename + '.log', '-m', plugin_path, '-s', synth_script],
     workdir: current_dir,
     timeout: 300
   )

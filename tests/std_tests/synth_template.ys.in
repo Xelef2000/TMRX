@@ -1,21 +1,25 @@
 read_verilog @INPUT@
-hierarchy -check -top top
 
-proc; opt; write_verilog -noattr 02_opt.v
+proc; opt; write_verilog -noattr @BASENAME@_02_opt.v
 
 techmap
-write_verilog -noattr 03_techmap.v
+write_verilog -noattr @BASENAME@_03_techmap.v
 
 tmrx
-write_verilog -noattr 04_tmrx.v
+write_verilog -noattr @BASENAME@_04_tmrx.v
 
 dfflibmap -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
-write_verilog -noattr 05_dff.v
+write_verilog -noattr @BASENAME@_05_dff.v
 
 abc -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
-write_verilog -noattr 06_gates.v
+write_verilog -noattr @BASENAME@_06_gates.v
+
+flatten
+write_verilog -noattr @BASENAME@_07_flattened.v
 
 clean
-write_verilog -noattr 07_final.v
+write_verilog -noattr @BASENAME@_08_final.v
+write_json @BASENAME@_08_final.json
+
 
 stat -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
