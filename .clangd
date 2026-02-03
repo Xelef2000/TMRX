@@ -1,0 +1,6 @@
+compileflags:
+  add:
+    - "-i/nix/store/kas7dsny5vcmai357r57m2h0bs4zracw-yosys-0.55/lib/python3.13/site-packages/pyosys/share/include"
+    - "-i/usr/include/yosys"
+    - "-d_gnu_source"
+    - "-std=c++11"
