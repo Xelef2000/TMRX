@@ -1,10 +1,10 @@
 module full_adder(
-    input [3:0] a,
-    input [3:0] b,
-    output [3:0] out
+    input [1:0] a,
+    input [1:0] b,
+    output [1:0] out
     );
     
-    wire [3:0] res;
+    wire [1:0] res;
 
     assign res = a + b;
 

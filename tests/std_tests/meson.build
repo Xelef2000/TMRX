@@ -10,6 +10,12 @@ configure_file(
   copy: true
 )
 
+configure_file(
+  input: 'xor.v',
+  output: 'xor.v',
+  copy: true
+)
+
 
 current_dir = meson.current_build_dir()
 
@@ -33,7 +39,7 @@ test('adder', yosys,
   workdir: current_dir
 )
 
-test_files = ['test.v', 'full_adder.v']
+test_files = ['test.v', 'full_adder.v', 'xor.v']
 
 synth_conf = configuration_data()
 synth_conf.set('PDK_ROOT', pdk_abs_path)
