@@ -11,7 +11,40 @@ struct TmrxPass : public Pass {
   TmrxPass() : Pass("tmrx", "add triple modular redundancy") {}
 
 
-  void dublicate_logic(RTLIL::Module &module, std::string suffix){
+  void dublicate_logic(RTLIL::Module *module, const std::vector<RTLIL::Wire*> &wires, const std::vector<RTLIL::Cell*> &cells, const std::string &suffix){
+
+      dict<RTLIL::Wire*, RTLIL::Wire*> wire_map;
+
+
+      for (auto w : wires) {
+          RTLIL::Wire *w_copy = module->addWire(module->uniquify(w->name.str() + suffix), w->width);
+          w_copy->port_input  = w->port_input;
+          w_copy->port_output = w->port_output;
+          w_copy->start_offset = w->start_offset;
+          w_copy->upto = w->upto;
+
+          wire_map[w] = w_copy;
+
+      }
+
+      for (auto c : cells){
+          RTLIL::Cell *c_copy = module->addCell(module->uniquify(c->name.str() + suffix), c->type);
+
+          c_copy->parameters = c->parameters;
+          c_copy->attributes = c->attributes;
+
+          for (auto &connection : c->connections()){
+              RTLIL::SigSpec sig = connection.second;
+
+              for (auto &it : wire_map){
+                  sig.replace(it.first, it.second);
+              }
+
+              c_copy->setPort(connection.first, sig);
+          }
+
+      }
+      module->fixup_ports();
 
   }
 
@@ -40,38 +73,10 @@ struct TmrxPass : public Pass {
 
 
 
-      // Add B
-      // Add wires
-      dict<RTLIL::Wire*, RTLIL::Wire*> wire_map;
+      dublicate_logic(worker, wires, cells, "_b");
 
-      for (auto w : wires) {
-          RTLIL::Wire *w_b = worker->addWire(worker->uniquify(w->name.str() + "_b"), w->width);
-          w_b->port_input  = w->port_input;
-          w_b->port_output = w->port_output;
-          w_b->start_offset = w->start_offset;
-          w_b->upto = w->upto;
+      dublicate_logic(worker, wires, cells, "_c");
 
-          wire_map[w] = w_b;
-
-      }
-
-      for (auto c : cells){
-          RTLIL::Cell *c_b = worker->addCell(worker->uniquify(c->name.str() + "_b"), c->type);
-
-          c_b->parameters = c->parameters;
-          c_b->attributes = c->attributes;
-
-          for (auto &connection : c->connections()){
-              RTLIL::SigSpec sig = connection.second;
-
-              for (auto &it : wire_map){
-                  sig.replace(it.first, it.second);
-              }
-
-              c_b->setPort(connection.first, sig);
-          }
-
-      }
 
 
       // Rename Wires, Cells
