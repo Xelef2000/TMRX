@@ -1,12 +1,19 @@
 #include "kernel/rtlil.h"
 #include "kernel/yosys.h"
 #include "kernel/yosys_common.h"
+#include <vector>
 
 USING_YOSYS_NAMESPACE
 PRIVATE_NAMESPACE_BEGIN
 
+
 struct TmrxPass : public Pass {
   TmrxPass() : Pass("tmrx", "add triple modular redundancy") {}
+
+
+  void dublicate_logic(RTLIL::Module &module, std::string suffix){
+
+  }
 
   void execute(vector<string>, Design *design) override {
     log_header(design, "Executing TMRX pass (Triple Modular Redundancy).\n");
@@ -25,23 +32,58 @@ struct TmrxPass : public Pass {
 
       log("Transforming module %s\n", log_id(mod_name));
 
-      // RTLIL::Module *tmp = new Module;
-      // worker->cloneInto(tmp);
-
-      // RTLIL::Wire *a = worker->addWire("\\a1", 1);
-      // a->port_input = true;
-      // a->port_id = 69;
 
 
-      // RTLIL::Wire *y = worker->addWire("\\b1", 1);
-      // y->port_output = true;
-      // y->port_id = 420;
+      std::vector<RTLIL::Wire*> wires(worker->wires().begin(), worker->wires().end());
 
-      // worker->addNeg(NEW_ID, a, y);
-      // 
-      for (auto w : worker->wires()){
+      std::vector<RTLIL::Cell*> cells(worker->cells().begin(), worker->cells().end());
+
+
+
+      // Add B
+      // Add wires
+      dict<RTLIL::Wire*, RTLIL::Wire*> wire_map;
+
+      for (auto w : wires) {
+          RTLIL::Wire *w_b = worker->addWire(worker->uniquify(w->name.str() + "_b"), w->width);
+          w_b->port_input  = w->port_input;
+          w_b->port_output = w->port_output;
+          w_b->start_offset = w->start_offset;
+          w_b->upto = w->upto;
+
+          wire_map[w] = w_b;
+
+      }
+
+      for (auto c : cells){
+          RTLIL::Cell *c_b = worker->addCell(worker->uniquify(c->name.str() + "_b"), c->type);
+
+          c_b->parameters = c->parameters;
+          c_b->attributes = c->attributes;
+
+          for (auto &connection : c->connections()){
+              RTLIL::SigSpec sig = connection.second;
+
+              for (auto &it : wire_map){
+                  sig.replace(it.first, it.second);
+              }
+
+              c_b->setPort(connection.first, sig);
+          }
+
+      }
+
+
+      // Rename Wires, Cells
+      for (auto w : wires){
           worker->rename(w,worker->uniquify(w->name.str()+"_a"));
       }
+
+      for(auto c : cells){
+          worker->rename(c,worker->uniquify(c->name.str()+ "_a"));
+      }
+
+
 
       worker->fixup_ports();
 
