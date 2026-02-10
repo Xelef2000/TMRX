@@ -44,7 +44,7 @@ struct TmrxPass : public Pass {
       for (size_t i = 0; i < inputs.size(); i++){
           for(size_t j = i+1; j < inputs.size(); j++){
               RTLIL::Wire* and_res = module->addWire(NEW_ID, wire_size);
-              module->addOr(NEW_ID, inputs.at(i), inputs.at(j), and_res);
+              module->addAnd(NEW_ID, inputs.at(i), inputs.at(j), and_res);
               all_pairs.push_back(and_res);
           }
       }
@@ -52,7 +52,7 @@ struct TmrxPass : public Pass {
       RTLIL::Wire* last_wire = all_pairs.at(0);
       for (auto it = all_pairs.begin()+1; it != all_pairs.end(); it++){
           RTLIL::Wire* out = module->addWire(NEW_ID, wire_size);
-          module->addAnd(NEW_ID,  last_wire, *it, out);
+          module->addOr(NEW_ID,  last_wire, *it, out);
           last_wire = out;
       }
 
@@ -77,10 +77,10 @@ struct TmrxPass : public Pass {
 
       log("Transforming module %s\n", log_id(mod_name));
 
-      bool preserve_module_ports = false;
+      bool preserve_module_ports = true;
       size_t rename_sufix_length = 2;
 
-      bool insert_voter_after_flip_flop = true;
+      bool insert_voter_after_flip_flop = false;
       bool insert_voter_before_flip_flop = false;
 
       std::vector<RTLIL::Wire*> orinal_wires(worker->wires().begin(), worker->wires().end());
