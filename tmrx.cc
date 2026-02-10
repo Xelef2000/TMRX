@@ -234,55 +234,33 @@ struct TmrxPass : public Pass {
       if(insert_voter_after_flip_flop){
 
           for (auto flip_flops : flip_flop_map){
-              std::vector<std::vector<std::pair<RTLIL::Wire*, RTLIL::SigSpec>>> all_new_out_coonections = {};
-              size_t nr_outputs = 0;
-              for (auto ff : flip_flops.second){
-                std::vector<RTLIL::IdString> outputs = get_output_port_name(ff);
-                if(outputs.size() == 0){
-                    log_error("Flip Flop witout output found");
-                }
 
-                std::vector<std::pair<RTLIL::Wire*, RTLIL::SigSpec>> new_out_connections ={};
-                nr_outputs = outputs.size();
-                for (auto out : outputs){
-                    RTLIL::SigSpec out_signal = ff->getPort(out);
-                    RTLIL::Wire* intermediate_wire = worker->addWire(NEW_ID, out_signal.size());
+              std::vector<RTLIL::IdString> output_ports = get_output_port_name(flip_flops.second.at(0));
 
-                    ff->setPort(out, intermediate_wire);
 
-                    // RTLIL::Cell *place_holder = worker->addNeg(NEW_ID, intermediate_wire, out_signal);
-
-                    std::pair<RTLIL::Wire*, RTLIL::SigSpec> new_connection = {intermediate_wire, out_signal};
-                    new_out_connections.push_back(new_connection);
-                }
-
-                all_new_out_coonections.push_back(new_out_connections);
+              if(output_ports.empty()){
+                  log_error("Flip Flop witout output found");
               }
 
-              std::vector<std::vector<std::pair<RTLIL::Wire*, RTLIL::SigSpec>>> reordered_new_out_coonections = {};
-              for( size_t i = 0; i < nr_outputs; i++){
-                  std::vector<std::pair<RTLIL::Wire*, RTLIL::SigSpec>> gate_out_connections = {};
-                  for( auto co : all_new_out_coonections){
-                      gate_out_connections.push_back(co.at(i));
+              for (auto port : output_ports){
+                  std::vector<RTLIL::Wire*> intermediate_wires;
+                  std::vector<RTLIL::SigSpec> original_signals;
+
+                  for(auto ff : flip_flops.second){
+                      RTLIL::SigSpec out_signal = ff->getPort(port);
+                      RTLIL::Wire* intermediate_wire = worker->addWire(NEW_ID, out_signal.size());
+
+                      ff->setPort(port, intermediate_wire);
+                      intermediate_wires.push_back(intermediate_wire);
+                      original_signals.push_back(out_signal);
                   }
-                  reordered_new_out_coonections.push_back(gate_out_connections);
+
+                  for (size_t i = 0; i < flip_flops.second.size();i++){
+                      RTLIL::Wire* voter_out = insert_voter(worker, intermediate_wires);
+                      worker->connect(voter_out, original_signals.at(i));
+                  }
+
               }
-
-              for (auto output_connections : reordered_new_out_coonections){
-                  vector<RTLIL::Wire*> inputs;
-                  vector<RTLIL::SigSpec> outputs;
-
-                  for (auto c : output_connections){
-                      inputs.push_back(c.first);
-                      outputs.push_back(c.second);
-                  }
-
-                  for(auto output : outputs){
-                      RTLIL::Wire* voter_out = insert_voter(worker, inputs);
-                      worker->connect(voter_out, output);
-                  }
-              }
-
 
           }
       }
