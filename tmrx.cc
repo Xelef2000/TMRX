@@ -1,8 +1,6 @@
-#include "kernel/log.h"
+
 #include "kernel/rtlil.h"
 #include "kernel/yosys.h"
-#include "kernel/yosys_common.h"
-#include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <string>
@@ -11,6 +9,34 @@
 
 USING_YOSYS_NAMESPACE
 PRIVATE_NAMESPACE_BEGIN
+
+static dict<RTLIL::IdString, pool<std::string>> ff_sources;
+
+struct MarkFFPass : public Pass{
+    MarkFFPass() : Pass("markff", "mark ff for later tmrx pass"){}
+
+    void execute(std::vector<std::string>, RTLIL::Design *design) override {
+        log_header(design, "Executing Mark Flip Flop Pass\n");
+        log_push();
+
+        for (auto module : design->modules()) {
+          if (design->selected(module) && !module->get_blackbox_attribute()) {
+              log("Scanning module %s for FFs\n", log_id(module));
+              for (auto cell : module->cells()){
+                log("Looking at cell %u\n", (RTLIL::builtin_ff_cell_types().count(cell->type) > 0));
+
+                if (RTLIL::builtin_ff_cell_types().count(cell->type) > 0){
+                      if (cell->has_attribute(ID::src)){
+                          std::string src = cell->get_string_attribute(ID::src);
+                          ff_sources[module->name].insert(src);
+                      }
+                }
+              }
+          }
+        }
+        log_pop();
+    }
+} MarkFFPass;
 
 
 struct TmrxPass : public Pass {
@@ -22,13 +48,31 @@ struct TmrxPass : public Pass {
   // }i
   //
 
+  bool is_flip_flop(const RTLIL::Cell *cell,const RTLIL::Module* module,const pool<RTLIL::IdString> *ff_cell_types, bool heurisitic_check = false) {
+      if (RTLIL::builtin_ff_cell_types().count(cell->type) > 0){
+          return true;
+      }
+
+      std::string src = cell->get_string_attribute(ID::src);
+      if (ff_sources[module->name].count(src) > 0) {
+          return true;
+      }
+
+
+      if(!ff_cell_types->empty() && ff_cell_types->count(cell->type)){
+          return true;
+      }
+
+      if(heurisitic_check){
+
+      }
+
+      return false;
+  }
+
+
   std::vector<RTLIL::IdString> get_output_port_name(const RTLIL::Cell *cell){
       std::vector<RTLIL::IdString> outputs = {};
-      for (auto &conn : cell->connections()){
-          if (cell->output(conn.first)){
-              outputs.push_back(conn.first);
-          }
-      }
 
       return outputs;
   }
@@ -70,6 +114,8 @@ struct TmrxPass : public Pass {
       }
     }
 
+
+
     for (auto mod_name : modules_to_process) {
       RTLIL::Module *worker = design->module(mod_name);
       if (!worker)
@@ -77,11 +123,13 @@ struct TmrxPass : public Pass {
 
       log("Transforming module %s\n", log_id(mod_name));
 
-      bool preserve_module_ports = true;
+      bool preserve_module_ports = false;
       size_t rename_sufix_length = 2;
 
-      bool insert_voter_after_flip_flop = false;
+      bool insert_voter_after_flip_flop = true;
       bool insert_voter_before_flip_flop = false;
+      bool heurisitc_ff_detection = false;
+      pool<RTLIL::IdString> known_ff_cell_names = {};
 
       std::vector<RTLIL::Wire*> orinal_wires(worker->wires().begin(), worker->wires().end());
       std::vector<RTLIL::Cell*> original_cells(worker->cells().begin(), worker->cells().end());
@@ -92,7 +140,6 @@ struct TmrxPass : public Pass {
       // Add B
       // Add wires
       dict<RTLIL::Wire*, RTLIL::Wire*> wire_map;
-      dict<RTLIL::SigSpec, RTLIL::Wire*> sigspec_map;
       dict<RTLIL::Wire*, std::vector<RTLIL::Wire*>> output_map;
 
       dict<RTLIL::Cell*, std::vector<RTLIL::Cell*>> flip_flop_map;
@@ -115,7 +162,6 @@ struct TmrxPass : public Pass {
           w_b->upto = w->upto;
 
           wire_map[w] = w_b;
-          sigspec_map[w] = w_b;
 
           // TODO: fix this
           if(w->port_output){
@@ -127,9 +173,10 @@ struct TmrxPass : public Pass {
       for (auto c : original_cells){
           RTLIL::Cell *c_b = worker->addCell(worker->uniquify(c->name.str() + "_b"), c->type);
 
-          log("Looking at cell %u\n", (RTLIL::builtin_ff_cell_types().count(c->type) > 0));
+          log("Looking at cell %u\n", (is_flip_flop(c, worker, &known_ff_cell_names, heurisitc_ff_detection)));
 
-          if (RTLIL::builtin_ff_cell_types().count(c->type) > 0){
+
+          if (is_flip_flop(c, worker, &known_ff_cell_names, heurisitc_ff_detection)){
               // TODO: fix this
               flip_flop_map[c] = {c, c_b};
           }
@@ -150,14 +197,19 @@ struct TmrxPass : public Pass {
       }
 
       for (auto conn : origina_connections){
-          RTLIL::Wire* first = sigspec_map[conn.first];
-          RTLIL::Wire* second = sigspec_map[conn.second];
+          RTLIL::SigSpec first = conn.first;
+          RTLIL::SigSpec second = conn.second;
+
+          for (auto &w : wire_map){
+              first.replace(w.first, w.second);
+              second.replace(w.first, w.second);
+
+          }
 
           worker->connect(first,second);
       }
 
       wire_map.clear();
-      sigspec_map.clear();
 
       for (auto w : orinal_wires) {
           if(preserve_module_ports && w->port_input){
@@ -173,7 +225,6 @@ struct TmrxPass : public Pass {
           w_c->upto = w->upto;
 
           wire_map[w] = w_c;
-          sigspec_map[w] = w_c;
 
           if(w->port_output){
               output_map[w].push_back(w_c);
@@ -186,7 +237,7 @@ struct TmrxPass : public Pass {
           RTLIL::Cell *c_c = worker->addCell(worker->uniquify(c->name.str() + "_c"), c->type);
 
 
-          if (RTLIL::builtin_ff_cell_types().count(c->type) > 0){
+          if ((is_flip_flop(c, worker, &known_ff_cell_names, heurisitc_ff_detection))){
               flip_flop_map[c].push_back(c_c);
           }
 
@@ -207,13 +258,17 @@ struct TmrxPass : public Pass {
 
 
       for (auto conn : origina_connections){
-          RTLIL::Wire* first = sigspec_map[conn.first];
-          RTLIL::Wire* second = sigspec_map[conn.second];
+          RTLIL::SigSpec first = conn.first;
+          RTLIL::SigSpec second = conn.second;
+
+          for (auto &w : wire_map){
+              first.replace(w.first, w.second);
+              second.replace(w.first, w.second);
+
+          }
 
           worker->connect(first,second);
       }
-
-
 
       // Rename Wires, Cells
       for (auto w : orinal_wires){
@@ -239,6 +294,7 @@ struct TmrxPass : public Pass {
 
 
               if(output_ports.empty()){
+                  log("Cell Type: %s\n",flip_flops.second.at(0)->type.str().c_str() );
                   log_error("Flip Flop witout output found");
               }
 
