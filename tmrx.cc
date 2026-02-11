@@ -1,4 +1,5 @@
 
+#include "kernel/log.h"
 #include "kernel/rtlil.h"
 #include "kernel/yosys.h"
 #include "kernel/yosys_common.h"
@@ -49,7 +50,7 @@ struct TmrxPass : public Pass {
   // }i
   //
 
-  bool is_flip_flop(const RTLIL::Cell *cell,const RTLIL::Module* module,const pool<RTLIL::IdString> *ff_cell_types, bool heurisitic_check = false) {
+  bool is_flip_flop(const RTLIL::Cell *cell,const RTLIL::Module* module,const pool<RTLIL::IdString> *ff_cell_types) {
       if (RTLIL::builtin_ff_cell_types().count(cell->type) > 0){
           return true;
       }
@@ -64,9 +65,6 @@ struct TmrxPass : public Pass {
           return true;
       }
 
-      if(heurisitic_check){
-
-      }
 
       return false;
   }
@@ -115,6 +113,8 @@ struct TmrxPass : public Pass {
 
       RTLIL::Wire *out_y = voter->addWire("\\y",wire_width);
       out_y->port_output = true;
+      RTLIL::Wire *out_err = voter->addWire("\\err", wire_width);
+      out_err->port_output = true;
 
       RTLIL::SigSpec pair1 = voter->And(NEW_ID, in_a, in_b);
       RTLIL::SigSpec pair2 = voter->And(NEW_ID,in_a, in_c);
@@ -122,12 +122,20 @@ struct TmrxPass : public Pass {
 
       RTLIL::SigSpec intermediate1 = voter->Or(NEW_ID, pair1, pair2);
       voter->addOr(NEW_ID, intermediate1, pair3, out_y);
+
+
+      RTLIL::SigSpec err_pair1 = voter->Xor(NEW_ID, in_a, in_b);
+      RTLIL::SigSpec err_pair2 = voter->Xor(NEW_ID, in_b, in_c);
+      voter->addOr(NEW_ID, err_pair1, err_pair2,out_err);
+
+
+
       voter->fixup_ports();
       return voter_name;
   }
 
 
-  RTLIL::Wire* insert_voter(RTLIL::Module* module, std::vector<RTLIL::Wire*> inputs, RTLIL::Design* design){
+  std::pair<RTLIL::Wire*, RTLIL::Wire*> insert_voter(RTLIL::Module* module, std::vector<RTLIL::Wire*> inputs, RTLIL::Design* design){
       if(inputs.size() != 3){
           log_error("Voters are only intendt to be inserted with 3 inputs");
       }
@@ -139,16 +147,18 @@ struct TmrxPass : public Pass {
 
 
 
-      RTLIL::Wire* last_wire = module->addWire(NEW_ID,wire_width);
+      RTLIL::Wire *last_wire = module->addWire(NEW_ID,wire_width);
+      RTLIL::Wire *err_wire = module->addWire(NEW_ID,wire_width);
       RTLIL::Cell *voter_inst = module->addCell(NEW_ID, voter_name);
 
       voter_inst->setPort("\\a", inputs.at(0));
       voter_inst->setPort("\\b", inputs.at(1));
       voter_inst->setPort("\\c", inputs.at(2));
       voter_inst->setPort("\\y", last_wire);
+      voter_inst->setPort("\\err", err_wire);
 
 
-      return last_wire;
+      return {last_wire, err_wire};
   }
 
   void execute(vector<string>, Design *design) override {
@@ -176,8 +186,8 @@ struct TmrxPass : public Pass {
 
       bool insert_voter_after_flip_flop = true;
       bool insert_voter_before_flip_flop = false;
-      bool heurisitc_ff_detection = false;
       pool<RTLIL::IdString> known_ff_cell_names = {};
+      std::vector<RTLIL::Wire*> error_signals = {};
 
       std::vector<RTLIL::Wire*> orinal_wires(worker->wires().begin(), worker->wires().end());
       std::vector<RTLIL::Cell*> original_cells(worker->cells().begin(), worker->cells().end());
@@ -189,7 +199,6 @@ struct TmrxPass : public Pass {
       // Add wires
       dict<RTLIL::Wire*, RTLIL::Wire*> wire_map;
       dict<RTLIL::Wire*, std::vector<RTLIL::Wire*>> output_map;
-
       dict<RTLIL::Cell*, std::vector<RTLIL::Cell*>> flip_flop_map;
 
 
@@ -202,12 +211,18 @@ struct TmrxPass : public Pass {
           }
 
 
+          if (w->has_attribute(ID(tmrx_error_sink))){
+              continue;
+          }
+
+
 
           RTLIL::Wire *w_b = worker->addWire(worker->uniquify(w->name.str() + "_b"), w->width);
           w_b->port_input  = w->port_input;
           w_b->port_output = w->port_output;
           w_b->start_offset = w->start_offset;
           w_b->upto = w->upto;
+          w_b->attributes = w->attributes;
 
           wire_map[w] = w_b;
 
@@ -221,10 +236,10 @@ struct TmrxPass : public Pass {
       for (auto c : original_cells){
           RTLIL::Cell *c_b = worker->addCell(worker->uniquify(c->name.str() + "_b"), c->type);
 
-          log("Looking at cell %u\n", (is_flip_flop(c, worker, &known_ff_cell_names, heurisitc_ff_detection)));
+          log("Looking at cell %u\n", (is_flip_flop(c, worker, &known_ff_cell_names)));
 
 
-          if (is_flip_flop(c, worker, &known_ff_cell_names, heurisitc_ff_detection)){
+          if (is_flip_flop(c, worker, &known_ff_cell_names)){
               // TODO: fix this
               flip_flop_map[c] = {c, c_b};
           }
@@ -265,12 +280,16 @@ struct TmrxPass : public Pass {
               continue;
           }
 
+          if (w->has_attribute(ID(tmrx_error_sink))){
+              continue;
+          }
 
           RTLIL::Wire *w_c = worker->addWire(worker->uniquify(w->name.str() + "_c"), w->width);
           w_c->port_input  = w->port_input;
           w_c->port_output = w->port_output;
           w_c->start_offset = w->start_offset;
           w_c->upto = w->upto;
+          w_c->attributes = w->attributes;
 
           wire_map[w] = w_c;
 
@@ -285,7 +304,7 @@ struct TmrxPass : public Pass {
           RTLIL::Cell *c_c = worker->addCell(worker->uniquify(c->name.str() + "_c"), c->type);
 
 
-          if ((is_flip_flop(c, worker, &known_ff_cell_names, heurisitc_ff_detection))){
+          if ((is_flip_flop(c, worker, &known_ff_cell_names))){
               flip_flop_map[c].push_back(c_c);
           }
 
@@ -320,7 +339,7 @@ struct TmrxPass : public Pass {
 
       // Rename Wires, Cells
       for (auto w : orinal_wires){
-          if(preserve_module_ports && (w->port_input)){
+          if( (preserve_module_ports && (w->port_input)) || (w->has_attribute(ID(tmrx_error_sink))) ){
               continue;
           }
           worker->rename(w,worker->uniquify(w->name.str()+"_a"));
@@ -360,8 +379,10 @@ struct TmrxPass : public Pass {
                   }
 
                   for (size_t i = 0; i < flip_flops.second.size();i++){
-                      RTLIL::Wire* voter_out = insert_voter(worker, intermediate_wires, design);
-                      worker->connect(voter_out, original_signals.at(i));
+                      std::pair<RTLIL::Wire*, RTLIL::Wire*> res_wires = insert_voter(worker, intermediate_wires, design);
+                      worker->connect(res_wires.first, original_signals.at(i));
+
+                      error_signals.push_back(res_wires.second);
                   }
 
               }
@@ -389,12 +410,34 @@ struct TmrxPass : public Pass {
                   output_wire->port_output = false;
               }
 
-              RTLIL::Wire* last_wire = insert_voter(worker, outputs.second, design);
+              std::pair<RTLIL::Wire*, RTLIL::Wire*> res_wires = insert_voter(worker, outputs.second, design);
+              error_signals.push_back(res_wires.second);
 
-
-              last_wire->port_output = true;
-              worker->rename(last_wire, worker->uniquify(outputs.first->name.str().substr(0, outputs.first->name.str().size() - rename_sufix_length)));
+              res_wires.first->port_output = true;
+              worker->rename(res_wires.first, worker->uniquify(outputs.first->name.str().substr(0, outputs.first->name.str().size() - rename_sufix_length)));
           }
+      }
+
+
+      // connect error signals
+      RTLIL::Wire *sink = nullptr;
+      for (auto w : orinal_wires){
+          if (w->has_attribute(ID(tmrx_error_sink))){
+              if(sink != nullptr){
+                  log_error("Dublicate error sinks, only one allowed");
+              }
+              sink = w;
+          }
+      }
+      if(sink != nullptr){
+          RTLIL::SigSpec last_wire = error_signals.back();
+          error_signals.pop_back();
+          for (auto s : error_signals){
+              last_wire = worker->Or(NEW_ID, last_wire, s);
+          }
+          worker->connect(sink, last_wire);
+
+
       }
 
 
