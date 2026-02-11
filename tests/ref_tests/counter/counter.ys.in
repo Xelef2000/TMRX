@@ -1,0 +1,41 @@
+read_verilog counter.v
+hierarchy -check -top top
+
+proc; opt; write_verilog -noattr 02_opt.v
+
+techmap
+write_verilog -noattr 03_techmap.v
+
+
+flatten
+write_verilog -noattr 04_flattened.v
+
+markff
+
+read_liberty -lib @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+
+
+dfflibmap -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+write_verilog -noattr 05_dff.v
+
+abc -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+write_verilog -noattr 06_gates.v
+
+tmrx
+write_verilog -noattr 07_tmrx.v
+opt -noff
+techmap
+dfflibmap -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+abc -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib -D 1000
+
+flatten
+opt_clean -purge
+
+clean
+write_verilog -noattr 08_final.v
+write_json 08_final.json
+show -format svg -prefix final_netlist top
+show -format dot -prefix final_netlist top
+
+
+stat -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
