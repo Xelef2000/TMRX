@@ -1,9 +1,9 @@
 module full_adder(
-    input a,
-    input b,
-    output out
+    input wire a,
+    input wire b,
+    output wire out
     );
-    
+
     wire res;
 
     assign res = a ^ b;
@@ -11,5 +11,3 @@ module full_adder(
     assign out = res;
 
 endmodule
-
- 

@@ -1,4 +1,4 @@
-module top(
+module dff_dual (
     input  wire clk,
     input  wire d,
     output wire q,

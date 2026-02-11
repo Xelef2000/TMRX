@@ -1,6 +1,7 @@
 
 #include "kernel/rtlil.h"
 #include "kernel/yosys.h"
+#include "kernel/yosys_common.h"
 #include <cstddef>
 #include <cstdlib>
 #include <string>
@@ -11,7 +12,7 @@ USING_YOSYS_NAMESPACE
 PRIVATE_NAMESPACE_BEGIN
 
 static dict<RTLIL::IdString, pool<std::string>> ff_sources;
-
+// TODO: Verify if this is the easiest way
 struct MarkFFPass : public Pass{
     MarkFFPass() : Pass("markff", "mark ff for later tmrx pass"){}
 
@@ -71,34 +72,81 @@ struct TmrxPass : public Pass {
   }
 
 
-  std::vector<RTLIL::IdString> get_output_port_name(const RTLIL::Cell *cell){
+  std::vector<RTLIL::IdString> get_output_port_name(const RTLIL::Cell *cell,const RTLIL::Design *design){
       std::vector<RTLIL::IdString> outputs = {};
+
+      const RTLIL::Module *cell_mod = design->module(cell->type);
+      if(cell_mod){
+          for (auto &conn : cell->connections()){
+              const RTLIL::Wire *wire = cell_mod->wire(conn.first);
+              if(wire && wire->port_output){
+                  outputs.push_back(conn.first);
+              }
+          }
+      } else {
+          for (auto &conn : cell->connections()) {
+              if (cell->output(conn.first)) {
+                  outputs.push_back(conn.first);
+              }
+          }
+      }
 
       return outputs;
   }
 
-  RTLIL::Wire* insert_voter(RTLIL::Module* module, std::vector<RTLIL::Wire*> inputs){
+
+  RTLIL::IdString createVoterCell(RTLIL::Design *design, size_t wire_width){
+
+      RTLIL::IdString voter_name =  "\\tmrx_simple_voter_"+ std::to_string(wire_width);
+      if(design->module(voter_name) != nullptr){
+          return voter_name;
+      }
+
+      RTLIL::Module *voter = design->addModule(voter_name);
+
+      voter->attributes[ID::keep_hierarchy] = RTLIL::State::S1;
+
+      RTLIL::Wire *in_a = voter->addWire("\\a", wire_width);
+      RTLIL::Wire *in_b = voter->addWire("\\b", wire_width);
+      RTLIL::Wire *in_c = voter->addWire("\\c", wire_width);
+      in_c->port_input = true;
+      in_a->port_input = true;
+      in_b->port_input = true;
+
+      RTLIL::Wire *out_y = voter->addWire("\\y",wire_width);
+      out_y->port_output = true;
+
+      RTLIL::SigSpec pair1 = voter->And(NEW_ID, in_a, in_b);
+      RTLIL::SigSpec pair2 = voter->And(NEW_ID,in_a, in_c);
+      RTLIL::SigSpec pair3 = voter->And(NEW_ID,in_b, in_c);
+
+      RTLIL::SigSpec intermediate1 = voter->Or(NEW_ID, pair1, pair2);
+      voter->addOr(NEW_ID, intermediate1, pair3, out_y);
+      voter->fixup_ports();
+      return voter_name;
+  }
+
+
+  RTLIL::Wire* insert_voter(RTLIL::Module* module, std::vector<RTLIL::Wire*> inputs, RTLIL::Design* design){
       if(inputs.size() != 3){
           log_error("Voters are only intendt to be inserted with 3 inputs");
       }
 
-      size_t wire_size = inputs.at(0)->width;
-      std::vector<RTLIL::Wire*> all_pairs = {};
+      size_t wire_width = inputs.at(0)->width;
 
-      for (size_t i = 0; i < inputs.size(); i++){
-          for(size_t j = i+1; j < inputs.size(); j++){
-              RTLIL::Wire* and_res = module->addWire(NEW_ID, wire_size);
-              module->addAnd(NEW_ID, inputs.at(i), inputs.at(j), and_res);
-              all_pairs.push_back(and_res);
-          }
-      }
 
-      RTLIL::Wire* last_wire = all_pairs.at(0);
-      for (auto it = all_pairs.begin()+1; it != all_pairs.end(); it++){
-          RTLIL::Wire* out = module->addWire(NEW_ID, wire_size);
-          module->addOr(NEW_ID,  last_wire, *it, out);
-          last_wire = out;
-      }
+      RTLIL::IdString voter_name = createVoterCell(design, wire_width);
+
+
+
+      RTLIL::Wire* last_wire = module->addWire(NEW_ID,wire_width);
+      RTLIL::Cell *voter_inst = module->addCell(NEW_ID, voter_name);
+
+      voter_inst->setPort("\\a", inputs.at(0));
+      voter_inst->setPort("\\b", inputs.at(1));
+      voter_inst->setPort("\\c", inputs.at(2));
+      voter_inst->setPort("\\y", last_wire);
+
 
       return last_wire;
   }
@@ -290,7 +338,7 @@ struct TmrxPass : public Pass {
 
           for (auto flip_flops : flip_flop_map){
 
-              std::vector<RTLIL::IdString> output_ports = get_output_port_name(flip_flops.second.at(0));
+              std::vector<RTLIL::IdString> output_ports = get_output_port_name(flip_flops.second.at(0), design);
 
 
               if(output_ports.empty()){
@@ -312,7 +360,7 @@ struct TmrxPass : public Pass {
                   }
 
                   for (size_t i = 0; i < flip_flops.second.size();i++){
-                      RTLIL::Wire* voter_out = insert_voter(worker, intermediate_wires);
+                      RTLIL::Wire* voter_out = insert_voter(worker, intermediate_wires, design);
                       worker->connect(voter_out, original_signals.at(i));
                   }
 
@@ -341,7 +389,7 @@ struct TmrxPass : public Pass {
                   output_wire->port_output = false;
               }
 
-              RTLIL::Wire* last_wire = insert_voter(worker, outputs.second);
+              RTLIL::Wire* last_wire = insert_voter(worker, outputs.second, design);
 
 
               last_wire->port_output = true;

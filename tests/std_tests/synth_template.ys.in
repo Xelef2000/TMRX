@@ -15,5 +15,3 @@ write_verilog -noattr @BASENAME@_07_flattened.v
 clean
 write_verilog -noattr @BASENAME@_08_final.v
 write_json @BASENAME@_08_final.json
-
-
