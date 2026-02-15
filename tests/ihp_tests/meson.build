@@ -1,2 +1,0 @@
-subdir('flattened')
-subdir('unflattened')
