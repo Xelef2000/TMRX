@@ -8,6 +8,8 @@ configure_file(input: 'flip-flop-neg.v', output: 'flip-flop-neg.v', copy: true)
 
 configure_file(input: 'flip-flop-multi.v', output: 'flip-flop-multi.v', copy: true)
 
+configure_file(input: 'nested.v', output: 'nested.v', copy: true)
+
 current_dir = meson.current_build_dir()
 
 test(
@@ -29,6 +31,7 @@ test_files = [
   'flip-flop.v',
   'flip-flop-neg.v',
   'flip-flop-multi.v',
+  'nested.v',
 ]
 
 synth_conf = configuration_data()

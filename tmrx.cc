@@ -34,10 +34,6 @@ struct MarkFFPass : public Pass {
           if (RTLIL::builtin_ff_cell_types().count(cell->type) > 0) {
             if (cell->has_attribute(ID::src)) {
               std::string src = cell->get_string_attribute(ID::src);
-              // cell->set_src_attribute(src.append("tmrx_ff"));
-              // cell->set_string_attribute(ID("\\tmrx_ff_test"), "test");
-              // cell->attributes[ID(\\tmrx_is_ff)] = RTLIL::Const(1);
-              // cell->attributes[ID::keep] = RTLIL::Const(1);
               ff_sources[module->name].insert(src);
             }
           }
