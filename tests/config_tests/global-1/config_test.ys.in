@@ -1,4 +1,4 @@
-read_verilog ihp_dummy.v
+read_verilog top.v
 hierarchy -check -top top
 
 proc; opt; write_verilog -noattr 02_opt.v
@@ -6,7 +6,7 @@ proc; opt; write_verilog -noattr 02_opt.v
 techmap
 write_verilog -noattr 03_techmap.v
 
-markff
+tmrx_mark
 
 read_liberty -lib @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
 
@@ -17,7 +17,7 @@ write_verilog -noattr 05_dff.v
 abc -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
 write_verilog -noattr 06_gates.v
 
-tmrx
+tmrx -c tmrx_config.toml
 write_verilog -noattr 07_tmrx.v
 opt -noff
 techmap

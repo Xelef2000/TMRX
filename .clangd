@@ -4,4 +4,8 @@ CompileFlags:
     - "-I../include"
     - "-Iinclude"
     - "-D_GNU_SOURCE"
+    - "-D_YOSYS_"
+    - "-DYOSYS_ENABLE_PLUGINS"
+    - "-DYOSYS_ENABLE_GLOB"
+    - "-DYOSYS_ENABLE_ZLIB"
     - "-std=c++17"

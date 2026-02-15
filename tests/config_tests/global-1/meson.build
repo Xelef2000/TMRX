@@ -9,13 +9,15 @@ configure_file(
 
 configure_file(input: './top.v', output: 'top.v', copy: true)
 
+configure_file(input: './tmrx_config.toml', output: 'tmrx_config.toml', copy: true)
+
 test(
   'config_test_global_1',
   yosys,
   args: [
-    '-ql', 'ihp_synth_flattened.log',
+    '-ql', 'config_test_global_1.log',
     '-m', plugin_path,
-    '-s', 'ihp_synth_flattened.ys',
+    '-s', 'config_test.ys',
     '-v', '10',
   ],
   timeout: 300,

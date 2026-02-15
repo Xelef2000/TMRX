@@ -22,7 +22,13 @@ endif
 
 inc_dir = include_directories('include')
 
-src_files = ['src/tmrx.cc', 'src/utils.cc', 'src/tmrx_pass.cc', 'src/mark_pass.cc']
+src_files = [
+  'src/tmrx.cc',
+  'src/utils.cc',
+  'src/tmrx_pass.cc',
+  'src/mark_pass.cc',
+  'src/config_manager.cc',
+]
 
 tmrx = custom_target(
   'tmrx_so',
