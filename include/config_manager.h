@@ -7,6 +7,7 @@
 #include <string>
 #include "toml11/toml.hpp"
 
+
 YOSYS_NAMESPACE_BEGIN
 
 YOSYS_NAMESPACE_END
@@ -30,6 +31,9 @@ const std::string cfg_expand_rst_attr_name = "\\tmrx_expand_rst";
 const std::string cfg_logic_path_1_suffix_attr_name = "\\tmrx_logic_path_1_suffix";
 const std::string cfg_logic_path_2_suffix_attr_name = "\\tmrx_logic_path_2_suffix";
 const std::string cfg_logic_path_3_suffix_attr_name = "\\tmrx_logic_path_3_suffix";
+
+const auto ATTRIBUTE_IS_PROPER_SUBMODULE = ID(tmrx_is_proper_submodule);
+
 
 struct Config{
     enum class TmrMode{
@@ -84,7 +88,7 @@ struct ConfigManager{
         Config global_cfg;
 
         Yosys::dict<std::string, Config> group_cfg;
-        Yosys::dict<Yosys::RTLIL::IdString, Config> cell_cfgs;
+        Yosys::dict<Yosys::RTLIL::IdString, Config> module_cfgs;
 
 
 

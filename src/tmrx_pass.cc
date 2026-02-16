@@ -17,6 +17,15 @@ struct TmrxPass : public Pass {
     TmrxPass() : Pass("tmrx", "add triple modular redundancy") {}
 
 
+    bool is_proper_submodule(RTLIL::Module *mod) {
+      if (mod->has_attribute(ID(tmrx_is_proper_submodule))) {
+        return mod->get_bool_attribute(ID(tmrx_is_proper_submodule));
+      }
+
+      return false;
+    }
+
+
     void execute(std::vector<std::string> args, RTLIL::Design *design) override {
         log_header(design, "Executing TMRX pass (Triple Modular Redundancy).\n");
         log_push();
@@ -41,7 +50,12 @@ struct TmrxPass : public Pass {
         ConfigManager cfg_mgr(design, config_file);
 
         for( auto mod : design->modules()){
-            log("%s\n",cfg_mgr.cfg_as_string(mod));
+            // for (auto cell : mod->cells()) {
+                if(is_proper_submodule(mod)){
+                    log("%s\n", cfg_mgr.cfg_as_string(mod));
+                }
+            // }
+
         }
 
 

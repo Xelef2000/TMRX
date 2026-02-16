@@ -22,5 +22,4 @@ extern dict<RTLIL::IdString, pool<std::string>> ff_sources;
 
 YOSYS_NAMESPACE_END
 
-const auto ATTRIBUTE_IS_PROPER_SUBMODULE = ID(tmrx_is_proper_submodule);
 #endif

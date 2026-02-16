@@ -13,6 +13,7 @@ struct TMRXMarkPass : public Pass {
         log_push();
 
         ff_sources.clear();
+
         for (auto module : design->modules()) {
             if (design->selected(module) && !module->get_blackbox_attribute()) {
                 log("Scanning module %s for FFs\n", log_id(module));
@@ -30,11 +31,11 @@ struct TMRXMarkPass : public Pass {
                 }
 
                 // mark submodules
-                for (auto c : module->cells()) {
-                    if (design->module(c->type) != nullptr) {
-                        c->set_bool_attribute(ATTRIBUTE_IS_PROPER_SUBMODULE, true);
-                    }
-                }
+                // for (auto c : module->cells()) {
+                    // if (design->module(c->type) != nullptr) {
+                        module->set_bool_attribute(ATTRIBUTE_IS_PROPER_SUBMODULE, true);
+                    // }
+                // }
             }
         }
         log_pop();
