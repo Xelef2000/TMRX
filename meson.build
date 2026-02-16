@@ -52,3 +52,5 @@ tmrx = custom_target(
 plugin_path = tmrx.full_path()
 
 subdir('tests/config_tests')
+subdir('tests/ref_tests')
+subdir('tests/ihp_tests')

@@ -107,15 +107,15 @@ Config ConfigManager::parse_config(const toml::value &t, const Config &default_c
     cfg.logic_path_3_suffix = toml::find_or(t, "logic_path_3_suffix", cfg.logic_path_3_suffix);
 
     for (auto &cell : toml::find_or<std::vector<std::string>>(t, "ff_cells", {})) {
-        cfg.ff_cells.insert("\\\\" + (cell));
+        cfg.ff_cells.insert("\\" + (cell));
     }
 
     for (auto &cell : toml::find_or<std::vector<std::string>>(t, "additional_ff_cells", {})) {
-        cfg.additional_ff_cells.insert("\\\\" + (cell));
+        cfg.additional_ff_cells.insert("\\" + (cell));
     }
 
     for (auto &cell : toml::find_or<std::vector<std::string>>(t, "excludet_ff_cells", {})) {
-        cfg.excludet_ff_cells.insert("\\\\" + (cell));
+        cfg.excludet_ff_cells.insert("\\" + (cell));
     }
 
     return cfg;
@@ -206,7 +206,7 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
 
         for (auto &[mod_name, group_value] : module_groups_table.as_table()) {
             std::string group_name = toml::get<std::string>(group_value);
-            group_assigments["\\\\" + mod_name] = group_name;
+            group_assigments["\\" + mod_name] = group_name;
         }
     }
 
@@ -263,7 +263,7 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
         }
 
         if (table_name.rfind(cfg_module_prefix, 0) == 0) {
-            Yosys::IdString mod_name = "\\\\" + (table_name.substr(cfg_module_prefix.size()));
+            Yosys::IdString mod_name = "\\" + (table_name.substr(cfg_module_prefix.size()));
             if (module_cfgs.count(mod_name) == 0) {
                 Yosys::log_warning("Module %s does not exist in design", mod_name);
                 continue;

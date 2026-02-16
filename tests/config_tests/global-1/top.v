@@ -58,6 +58,7 @@ module top(
 
 endmodule
 
+(* tmrx_logic_path_1_suffix = "_aa" *)
 module submodule_1(
     input wire clk_i,
     input wire rst_ni,
@@ -99,7 +100,7 @@ module submodule_3(
 );
 
     reg signal_q;
-    wire signal_d, res_d, sub_err;
+    wire signal_d, res_d, inv_d, sub_err;
     assign signal_d = input_a_i ^ res_d;
 
 
@@ -111,11 +112,16 @@ module submodule_3(
         .err_o(sub_err)
     );
 
+    submodule_2 sub2 (
+        .input_a_i(signal_q),
+        .out_o(inv_d)
+    );
+
     always @(posedge clk_i or negedge rst_ni) begin
         if(!rst_ni)
             signal_q <=1'b0;
         else
-            signal_q <= signal_d;
+            signal_q <= signal_d | (res_d ^ inv_d);
     end
 
     assign out_o = signal_q;
