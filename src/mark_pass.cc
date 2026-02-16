@@ -13,7 +13,6 @@ struct TMRXMarkPass : public Pass {
         log_push();
 
         ff_sources.clear();
-
         for (auto module : design->modules()) {
             if (design->selected(module) && !module->get_blackbox_attribute()) {
                 log("Scanning module %s for FFs\n", log_id(module));

@@ -30,14 +30,14 @@ struct TmrxPass : public Pass {
         std::string config_file = "";
 
         for (size_t arg = 1; arg < args.size(); arg++) {
-            if (args[arg] == "-config" && arg+1 < args.size()) {
+            if (args[arg] == "-c" && arg + 1 < args.size()) {
                 config_file = args[++arg];
                 continue;
             }
             break;
         }
 
-
+        
         ConfigManager cfg_mgr(design, config_file);
 
 
