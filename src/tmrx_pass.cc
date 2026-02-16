@@ -37,8 +37,12 @@ struct TmrxPass : public Pass {
             break;
         }
 
-        
+
         ConfigManager cfg_mgr(design, config_file);
+
+        for( auto mod : design->modules()){
+            log("%s\n",cfg_mgr.cfg_as_string(mod));
+        }
 
 
         // for()

@@ -211,6 +211,7 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
     }
 
     Yosys::log_header(design, "Parsing module attrs cfg");
+    // TODO: verify if this is an issue, else only process proper submodules
     for (auto module : design->modules()) {
         Yosys::RTLIL::IdString mod_name = module->name;
         Yosys::log_header(design, "Looking at Module %s", mod_name);
@@ -312,7 +313,34 @@ std::string ConfigManager::cfg_as_string(Yosys::RTLIL::Module *mod) {
     ret += "Tmr Mode full; insert voter after module " + (cfg.tmr_mode_full_module_insert_voter_after_modules ? true_str : false_str) + "\n";
 
     ret += "Clock port name: " + cfg.clock_port_name + "\n";
-    ret += "Expan Clock net";
+    ret += "Expand Clock net: " + (cfg.expand_clock ? true_str : false_str) + "\n";
+
+    ret += "Reset port name: " + cfg.reset_port_name + "\n";
+    ret += "Expand reset net: " + (cfg.expand_reset ? true_str : false_str) + "\n";
+
+    ret += "FF Cells: [";
+    for (auto cell : cfg.ff_cells){
+        ret += cell.str() + ", ";
+    }
+    ret += "]\n";
+
+    ret += "Additional FF Cells: [";
+    for (auto cell : cfg.additional_ff_cells){
+        ret += cell.str() + ", ";
+    }
+    ret += "]\n";
+
+    ret += "Excldet FF Cells: [";
+    for (auto cell : cfg.excludet_ff_cells){
+        ret += cell.str() + ", ";
+    }
+    ret += "]\n";
+
+
+    ret += "Logic path 1 suffix: " + cfg.logic_path_1_suffix + "\n";
+    ret += "Logic path 2 suffix: " + cfg.logic_path_2_suffix + "\n";
+    ret += "Logic path 3 suffix: " + cfg.logic_path_3_suffix + "\n";
+
 
     return ret;
 }
