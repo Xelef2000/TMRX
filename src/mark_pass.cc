@@ -31,11 +31,11 @@ struct TMRXMarkPass : public Pass {
                 }
 
                 // mark submodules
-                // for (auto c : module->cells()) {
-                    // if (design->module(c->type) != nullptr) {
-                        module->set_bool_attribute(ATTRIBUTE_IS_PROPER_SUBMODULE, true);
-                    // }
-                // }
+                for (auto c : module->cells()) {
+                    if (design->module(c->type) != nullptr) {
+                        design->module(c->type)->set_bool_attribute(ATTRIBUTE_IS_PROPER_SUBMODULE, true);
+                    }
+                }
             }
         }
         log_pop();

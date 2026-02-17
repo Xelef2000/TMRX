@@ -20,9 +20,8 @@ struct TmrxPass : public Pass {
   public:
     TmrxPass() : Pass("tmrx", "add triple modular redundancy") {}
 
-    //TODO: make nullptr tollerant
     bool is_proper_submodule(RTLIL::Module *mod) {
-      if (mod->has_attribute(ID(tmrx_is_proper_submodule))) {
+      if ((mod != nullptr) && mod->has_attribute(ID(tmrx_is_proper_submodule))) {
         return mod->get_bool_attribute(ID(tmrx_is_proper_submodule));
       }
 
@@ -52,7 +51,7 @@ struct TmrxPass : public Pass {
       return false;
     }
 
-    std::pair<std::vector<RTLIL::IdString>, std::vector<RTLIL::IdString>>   get_output_port_name(const RTLIL::Cell *cell, const RTLIL::Design *design) {
+    std::pair<std::vector<RTLIL::IdString>, std::vector<RTLIL::IdString>>   get_port_names(const RTLIL::Cell *cell, const RTLIL::Design *design) {
       std::vector<RTLIL::IdString> outputs = {};
       std::vector<RTLIL::IdString> inputs = {};
 
@@ -147,13 +146,13 @@ struct TmrxPass : public Pass {
     }
 
 
-    std::tuple<dict<RTLIL::SigSpec, RTLIL::SigSpec> , dict<RTLIL::Wire *, RTLIL::Wire *>, dict<RTLIL::Cell*,RTLIL::Cell*>> insert_duplicate_logic(RTLIL::Module *mod, std::vector<RTLIL::Wire*> wires, std::vector<RTLIL::Cell*> cells, std::string suffix, const Config *cfg){
+    std::tuple<dict<RTLIL::SigSpec, RTLIL::SigSpec> , dict<RTLIL::Wire *, RTLIL::Wire *>, dict<RTLIL::Cell*,RTLIL::Cell*>> insert_duplicate_logic(RTLIL::Module *mod, std::vector<RTLIL::Wire*> wires, std::vector<RTLIL::Cell*> cells,std::vector<RTLIL::SigSig> connections, std::string suffix, const Config *cfg){
         dict<RTLIL::SigSpec, RTLIL::SigSpec> wire_map;
         dict<RTLIL::Wire*, RTLIL::Wire*> output_map;
         dict<RTLIL::Cell *, RTLIL::Cell *> flip_flop_map;
 
         for(auto w : wires){
-            // TODO: verify if this actually works
+            // TODO: verify if this actually works, fix no clk/rst expansion
             if((cfg->preserv_module_ports && w->port_input) || (w->name == cfg->clock_port_name && !cfg->expand_clock) || (w->name == cfg->reset_port_name && !cfg->expand_reset)){
                 wire_map[w] = w;
                 continue;
@@ -179,16 +178,96 @@ struct TmrxPass : public Pass {
 
         }
 
+        for (auto c :cells) {
+          // if (is_proper_submodule(c->module->design->module(c->type))) {
+          //   continue;
+          // }
+
+          RTLIL::Cell *c_b = mod->addCell(mod->uniquify(c->name.str() + suffix), c->type);
+
+          // log("Looking at cell %u\n",
+              // (is_flip_flop(c, worker, &known_ff_cell_names)));
+
+          if (is_flip_flop(c, mod , cfg)) {
+            // TODO: fix this
+            flip_flop_map[c] = c_b;
+          }
+
+          c_b->parameters = c->parameters;
+          c_b->attributes = c->attributes;
+
+          for (auto &connection : c->connections()) {
+            RTLIL::SigSpec sig = connection.second;
+
+            for (auto &it : wire_map) {
+              sig.replace(it.first, it.second);
+            }
+
+            c_b->setPort(connection.first, sig);
+          }
+        }
+
+        // TODO: imprive this
+        for (auto conn : connections) {
+          RTLIL::SigSpec first = conn.first;
+          RTLIL::SigSpec second = conn.second;
+
+          for (auto &w : wire_map) {
+            first.replace(w.first, w.second);
+            second.replace(w.first, w.second);
+          }
+
+          mod->connect(first, second);
+        }
+
+
         return {wire_map, output_map, flip_flop_map};
+    }
+
+    void rename_wires_and_cells(RTLIL::Module *mod, std::vector<RTLIL::Wire*> wires, std::vector<RTLIL::Cell*> cells, std::string suffix, const Config *cfg){
+        log_header(mod->design, "Renaming wires with suffix %s\n", suffix.c_str());
+        for (auto w : wires) {
+          // if ((cfg->preserv_module_ports && (w->port_input)) ||
+          //     (w->has_attribute(ID(tmrx_error_sink)))) {
+          //   continue;
+          // }
+          mod->rename(w, mod->uniquify(w->name.str() + suffix));
+        }
+
+        for (auto c : cells) {
+          if (is_proper_submodule(c->module->design->module(c->type))) {
+            continue;
+          }
+
+          mod->rename(c, mod->uniquify(c->name.str() + suffix));
+        }
+
     }
 
     void logic_tmr_expansion(RTLIL::Module *mod, const Config *cfg){
         std::vector<RTLIL::Wire*> error_signals = {};
 
-        std::vector<RTLIL::Wire*> orinal_wires(mod->wires().begin(), mod->wires().end());
+        std::vector<RTLIL::Wire*> original_wires(mod->wires().begin(), mod->wires().end());
         std::vector<RTLIL::Cell*> original_cells(mod->cells().begin(), mod->cells().end());
-        std::vector<RTLIL::SigSig> origina_connections(mod->connections().begin(), mod->connections().end());
+        std::vector<RTLIL::SigSig> original_connections(mod->connections().begin(), mod->connections().end());
 
+        log_header(mod->design, "Logic TMR expansion");
+        auto [wiremap_b, outputmapt_b, flipflopmap_b] = insert_duplicate_logic(mod, original_wires, original_cells, original_connections, cfg->logic_path_2_suffix, cfg);
+        auto [wiremap_c, outputmapt_c, flipflopmap_c] = insert_duplicate_logic(mod, original_wires, original_cells, original_connections, cfg->logic_path_3_suffix, cfg);
+
+        // connect submodules
+
+        rename_wires_and_cells(mod, original_wires, original_cells, cfg->logic_path_1_suffix, cfg);
+
+
+
+        if(cfg->preserv_module_ports){
+            // add output voters
+        }
+
+        // insert ff voters
+
+        // return error wires
     }
 
 
@@ -232,6 +311,10 @@ struct TmrxPass : public Pass {
             if ( design->module(c->type) && (is_proper_submodule(design->module(c->type))) ) {
               modules_to_process.edge(module->name, c->type);
             }
+
+            // if(design->module(c->type) == nullptr){
+            //     log("Mod %s is null\n", c->type.c_str());
+            // }
           }
         }
 
@@ -251,7 +334,7 @@ struct TmrxPass : public Pass {
              }
 
              if (cfg_mgr.cfg(worker)->tmr_mode == Config::TmrMode::LogicTMR) {
-
+                 logic_tmr_expansion(worker, cfg_mgr.cfg(worker));
 
              }
 
