@@ -276,17 +276,17 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
     }
 }
 
-const Config* ConfigManager::cfg(Yosys::RTLIL::Module *mod) {
+const Config* ConfigManager::cfg(Yosys::RTLIL::Module *mod) const{
     if(module_cfgs.count(mod->name) == 0){
         return &global_cfg;
     }
 
-    return &module_cfgs[mod->name];
+    return &module_cfgs.at(mod->name);
 }
 
 
 
-std::string ConfigManager::cfg_as_string(Yosys::RTLIL::Module *mod) {
+std::string ConfigManager::cfg_as_string(Yosys::RTLIL::Module *mod) const {
     const Config *mcfg = cfg(mod);
     std::string ret = "";
 

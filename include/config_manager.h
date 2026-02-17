@@ -94,8 +94,8 @@ struct ConfigManager{
 
     public:
         ConfigManager(Yosys::RTLIL::Design *design, const std::string &config_file);
-        const Config* cfg(Yosys::RTLIL::Module *mod);
-        std::string cfg_as_string(Yosys::RTLIL::Module *mod);
+        const Config* cfg(Yosys::RTLIL::Module *mod) const;
+        std::string cfg_as_string(Yosys::RTLIL::Module *mod) const;
 
 };
 
