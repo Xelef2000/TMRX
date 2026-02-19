@@ -126,7 +126,7 @@ struct TmrxPass : public Pass {
     insert_voter(RTLIL::Module *module, std::vector<RTLIL::SigSpec> inputs,
                  RTLIL::Design *design) {
       if (inputs.size() != 3) {
-        log_error("Voters are only intendt to be inserted with 3 inputs");
+        log_error("Voters are only intended to be inserted with 3 inputs");
       }
 
       size_t wire_width = inputs.at(0).size();

@@ -44,7 +44,7 @@ void ConfigManager::load_default_groups_cfg() {
     // TODO: add top module
 }
 
-std::string ConfigManager::get_string_atrr_value_or(const Yosys::RTLIL::Module *mod,const std::string& attr, const std::string &def){
+std::string ConfigManager::get_string_attr_value_or(const Yosys::RTLIL::Module *mod,const std::string& attr, const std::string &def){
     std::string ret = def;
     if(mod->has_attribute(attr)){
         ret = mod->get_string_attribute(attr);
@@ -126,7 +126,7 @@ Config ConfigManager::parse_module_annotations(const Yosys::RTLIL::Module *mod,
     Config cfg(default_cfg);
 
     // TODO: move strings to header and factor out
-    std::string tmr_mode_str = get_string_atrr_value_or(mod, cfg_tmr_mode_attr_name, "");
+    std::string tmr_mode_str = get_string_attr_value_or(mod, cfg_tmr_mode_attr_name, "");
     if (!tmr_mode_str.empty()) {
         if (tmr_mode_str == "None")
             cfg.tmr_mode = Config::TmrMode::None;
@@ -136,7 +136,7 @@ Config ConfigManager::parse_module_annotations(const Yosys::RTLIL::Module *mod,
             cfg.tmr_mode = Config::TmrMode::LogicTMR;
     }
 
-    std::string tmr_voter_str = get_string_atrr_value_or(mod, cfg_tmr_voter_attr_name, "");
+    std::string tmr_voter_str = get_string_attr_value_or(mod, cfg_tmr_voter_attr_name, "");
     if (!tmr_voter_str.empty()) {
         if (tmr_voter_str == "Default")
             cfg.tmr_voter = Config::TmrVoter::Default;
@@ -150,15 +150,15 @@ Config ConfigManager::parse_module_annotations(const Yosys::RTLIL::Module *mod,
     cfg.tmr_mode_full_module_insert_voter_before_modules = get_bool_attr_value_or(mod, cfg_tmr_mode_full_module_insert_voter_before_modules_attr_name, default_cfg.tmr_mode_full_module_insert_voter_before_modules);
     cfg.tmr_mode_full_module_insert_voter_after_modules = get_bool_attr_value_or(mod, cfg_tmr_mode_full_module_insert_voter_after_modules_attr_name, default_cfg.tmr_mode_full_module_insert_voter_after_modules);
 
-    cfg.clock_port_name = get_string_atrr_value_or(mod, cfg_clock_port_name_attr_name, default_cfg.clock_port_name);
-    cfg.reset_port_name = get_string_atrr_value_or(mod, cfg_rst_port_name_attr_name, default_cfg.reset_port_name);
+    cfg.clock_port_name = get_string_attr_value_or(mod, cfg_clock_port_name_attr_name, default_cfg.clock_port_name);
+    cfg.reset_port_name = get_string_attr_value_or(mod, cfg_rst_port_name_attr_name, default_cfg.reset_port_name);
 
     cfg.expand_clock = get_bool_attr_value_or(mod, cfg_expand_clock_attr_name, default_cfg.expand_clock);
     cfg.expand_reset = get_bool_attr_value_or(mod, cfg_expand_rst_attr_name, default_cfg.expand_reset);
 
-    cfg.logic_path_1_suffix = get_string_atrr_value_or(mod, cfg_logic_path_1_suffix_attr_name, default_cfg.logic_path_1_suffix);
-    cfg.logic_path_2_suffix = get_string_atrr_value_or(mod, cfg_logic_path_2_suffix_attr_name, default_cfg.logic_path_2_suffix);
-    cfg.logic_path_3_suffix = get_string_atrr_value_or(mod, cfg_logic_path_3_suffix_attr_name, default_cfg.logic_path_3_suffix);
+    cfg.logic_path_1_suffix = get_string_attr_value_or(mod, cfg_logic_path_1_suffix_attr_name, default_cfg.logic_path_1_suffix);
+    cfg.logic_path_2_suffix = get_string_attr_value_or(mod, cfg_logic_path_2_suffix_attr_name, default_cfg.logic_path_2_suffix);
+    cfg.logic_path_3_suffix = get_string_attr_value_or(mod, cfg_logic_path_3_suffix_attr_name, default_cfg.logic_path_3_suffix);
     return cfg;
 }
 
@@ -198,15 +198,15 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
                 parse_config(table_value, global_cfg);
         }
     }
-    Yosys::log_header(design, "Parsing group assigments");
-    Yosys::dict<Yosys::RTLIL::IdString, std::string> group_assigments;
+    Yosys::log_header(design, "Parsing group assignments");
+    Yosys::dict<Yosys::RTLIL::IdString, std::string> group_assignments;
 
     if (t.contains("module_groups")) {
         const auto &module_groups_table = toml::get<toml::value>(t.at("module_groups"));
 
         for (auto &[mod_name, group_value] : module_groups_table.as_table()) {
             std::string group_name = toml::get<std::string>(group_value);
-            group_assigments["\\" + mod_name] = group_name;
+            group_assignments["\\" + mod_name] = group_name;
         }
     }
 
@@ -220,10 +220,10 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
 
         Config def = global_cfg;
 
-        std::string group_name = get_string_atrr_value_or(module, cfg_group_assignment_attr_name ,"");
+        std::string group_name = get_string_attr_value_or(module, cfg_group_assignment_attr_name ,"");
 
-        if (group_assigments.count(mod_name) > 0) {
-            group_name = group_assigments[mod_name];
+        if (group_assignments.count(mod_name) > 0) {
+            group_name = group_assignments[mod_name];
         }
 
         if (group_cfg.count(group_name) > 0) {
@@ -239,7 +239,7 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
         if(module->has_memories() || module->has_processes()){
             group_name = "black_box_module";
             def = group_cfg[group_name];
-            Yosys::log_warning("Module %s contains memories or processes, module will be treated as black box", mod_name);
+            Yosys::log_warning("Module %s contains memories or processes, module will be treated as black box", mod_name.c_str());
         }
 
         if(module->get_blackbox_attribute() || module->has_memories() || module->has_processes()){
@@ -248,7 +248,7 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
         }
 
         if(!group_name.empty()){
-            group_assigments[mod_name] = group_name;
+            group_assignments[mod_name] = group_name;
         }
         // Yosys::log_header(design, "creating id string");
         module_cfgs[mod_name] = parse_module_annotations(module, def);
@@ -265,7 +265,7 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
         if (table_name.rfind(cfg_module_prefix, 0) == 0) {
             Yosys::IdString mod_name = "\\" + (table_name.substr(cfg_module_prefix.size()));
             if (module_cfgs.count(mod_name) == 0) {
-                Yosys::log_warning("Module %s does not exist in design", mod_name);
+                Yosys::log_warning("Module %s does not exist in design", mod_name.c_str());
                 continue;
             }
 

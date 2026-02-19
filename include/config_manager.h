@@ -79,7 +79,7 @@ struct ConfigManager{
         void load_global_default_cfg();
         void load_default_groups_cfg();
         void validate_cfg();
-        std::string get_string_atrr_value_or(const Yosys::RTLIL::Module *mod,const std::string& attr, const std::string &def);
+        std::string get_string_attr_value_or(const Yosys::RTLIL::Module *mod,const std::string& attr, const std::string &def);
         bool get_bool_attr_value_or(const Yosys::RTLIL::Module *mod,const std::string& attr, bool def);
         int get_int_attr_value_or(const Yosys::RTLIL::Module *mod,const std::string& attr, int def);
         Config parse_config(const toml::value &t, const Config &default_cfg);
