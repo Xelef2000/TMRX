@@ -1,10 +1,14 @@
-read_verilog ihp_dummy.v
+read_verilog counter.v
 hierarchy -check -top top
 
 proc; opt; write_verilog -noattr 02_opt.v
 
 techmap
 write_verilog -noattr 03_techmap.v
+
+
+flatten
+write_verilog -noattr 04_flattened.v
 
 tmrx_mark
 
@@ -24,7 +28,7 @@ techmap
 dfflibmap -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
 abc -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib -D 1000
 
-
+flatten
 opt_clean -purge
 
 clean

@@ -48,3 +48,6 @@
 
 #IHP dir
 IHP-Open-PDK/*
+
+# cache
+.cache/*

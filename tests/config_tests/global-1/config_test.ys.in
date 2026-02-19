@@ -1,4 +1,4 @@
-read_verilog ihp_dummy.v
+read_verilog top.v
 hierarchy -check -top top
 
 proc; opt; write_verilog -noattr 02_opt.v

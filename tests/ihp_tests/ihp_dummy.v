@@ -1,20 +1,60 @@
-module top(input clk, rst, input [7:0] a, b, output [7:0] out);
-    wire [7:0] count;
-    wire [7:0] alu_res;
-    
-    counter c0 (.clk(clk), .rst(rst), .val(count));
-    alu a0 (.op_a(a), .op_b(b), .mode(count[0]), .res(alu_res));
-    
-    assign out = alu_res;
-endmodule
+module top (
+    input  wire clk_i,
+    input  wire rst_ni,
+    input  wire in0_i,
+    input  wire in1_i,
+    output wire out_o,
+    (* tmrx_error_sink *)
+    output wire err_o
+);
 
-module counter(input clk, rst, output reg [7:0] val);
-    always @(posedge clk) begin
-        if (rst) val <= 0;
-        else val <= val + 1;
+    reg sig_q;
+    wire sig_d, res_y;
+
+    assign sig_d = res_y ^ in1_i;
+
+
+    submodule u_sub (
+        .clk_i(clk_i),
+        .rst_ni(rst_ni),
+        .a_i(in0_i),
+        .b_i(sig_q),
+        .y_o(res_y)
+    );
+
+
+    always @(posedge clk_i or posedge rst_ni) begin
+        if (!rst_ni)
+            sig_q <= 1'b0;
+        else
+            sig_q <= sig_d;
     end
+
+    assign out_o = sig_q;
+
 endmodule
 
-module alu(input [7:0] op_a, op_b, input mode, output [7:0] res);
-    assign res = mode ? (op_a + op_b) : (op_a - op_b);
+
+
+module submodule (
+    input  wire clk_i,
+    input  wire rst_ni,
+    input  wire a_i,
+    input  wire b_i,
+    output wire y_o
+);
+
+    reg q;
+
+    wire d = (a_i & b_i) ^ q;
+
+    always @(posedge clk_i or posedge rst_ni) begin
+        if (!rst_ni)
+            q <= 1'b0;
+        else
+            q <= d;
+    end
+
+    assign y_o = q | a_i;
+
 endmodule
