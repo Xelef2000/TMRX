@@ -10,7 +10,7 @@ void ConfigManager::load_global_default_cfg() {
     global_cfg.tmr_mode = Config::TmrMode::LogicTMR;
     global_cfg.tmr_voter = Config::TmrVoter::Default;
 
-    global_cfg.preserv_module_ports = false;
+    global_cfg.preserve_module_ports = false;
 
     global_cfg.insert_voter_before_ff = false;
     global_cfg.insert_voter_after_ff = true;
@@ -26,7 +26,7 @@ void ConfigManager::load_global_default_cfg() {
 
     global_cfg.ff_cells = {};
     global_cfg.additional_ff_cells = {};
-    global_cfg.excludet_ff_cells = {};
+    global_cfg.excluded_ff_cells = {};
 
     global_cfg.logic_path_1_suffix = "_a";
     global_cfg.logic_path_2_suffix = "_b";
@@ -51,14 +51,14 @@ std::string ConfigManager::get_string_atrr_value_or(const Yosys::RTLIL::Module *
     }
     return ret;
 }
-bool ConfigManager::get_bool_atrr_value_or(const Yosys::RTLIL::Module *mod,const std::string& attr, bool def){
+bool ConfigManager::get_bool_attr_value_or(const Yosys::RTLIL::Module *mod,const std::string& attr, bool def){
     bool ret = def;
     if(mod->has_attribute(attr)){
         ret = (mod->get_string_attribute(attr)) == "1";
     }
     return  ret;
 }
-int ConfigManager::get_int_atrr_value_or(const Yosys::RTLIL::Module *mod,const std::string& attr, int def){
+int ConfigManager::get_int_attr_value_or(const Yosys::RTLIL::Module *mod,const std::string& attr, int def){
     int ret = def;
     if(mod->has_attribute(attr)){
         ret = std::stoi(mod->get_string_attribute(attr));
@@ -88,8 +88,8 @@ Config ConfigManager::parse_config(const toml::value &t, const Config &default_c
             cfg.tmr_voter = Config::TmrVoter::Default;
     }
 
-    cfg.preserv_module_ports =
-        toml::find_or(t, "preserv_module_ports", default_cfg.preserv_module_ports);
+    cfg.preserve_module_ports =
+        toml::find_or(t, "preserv_module_ports", default_cfg.preserve_module_ports);
 
     cfg.insert_voter_before_ff =
         toml::find_or(t, "insert_voter_before_ff", default_cfg.insert_voter_before_ff);
@@ -114,8 +114,8 @@ Config ConfigManager::parse_config(const toml::value &t, const Config &default_c
         cfg.additional_ff_cells.insert("\\" + (cell));
     }
 
-    for (auto &cell : toml::find_or<std::vector<std::string>>(t, "excludet_ff_cells", {})) {
-        cfg.excludet_ff_cells.insert("\\" + (cell));
+    for (auto &cell : toml::find_or<std::vector<std::string>>(t, "excluded_ff_cells", {})) {
+        cfg.excluded_ff_cells.insert("\\" + (cell));
     }
 
     return cfg;
@@ -142,19 +142,19 @@ Config ConfigManager::parse_module_annotations(const Yosys::RTLIL::Module *mod,
             cfg.tmr_voter = Config::TmrVoter::Default;
     }
 
-    cfg.preserv_module_ports = get_bool_atrr_value_or(mod, cfg_tmr_preserve_module_ports_attr_name, default_cfg.preserv_module_ports);
+    cfg.preserve_module_ports = get_bool_attr_value_or(mod, cfg_tmr_preserve_module_ports_attr_name, default_cfg.preserve_module_ports);
 
-    cfg.insert_voter_before_ff = get_bool_atrr_value_or(mod, cfg_insert_voter_before_ff_attr_name, default_cfg.insert_voter_before_ff);
-    cfg.insert_voter_after_ff = get_bool_atrr_value_or(mod, cfg_insert_voter_after_ff_attr_name, default_cfg.insert_voter_after_ff);
+    cfg.insert_voter_before_ff = get_bool_attr_value_or(mod, cfg_insert_voter_before_ff_attr_name, default_cfg.insert_voter_before_ff);
+    cfg.insert_voter_after_ff = get_bool_attr_value_or(mod, cfg_insert_voter_after_ff_attr_name, default_cfg.insert_voter_after_ff);
 
-    cfg.tmr_mode_full_module_insert_voter_before_modules = get_bool_atrr_value_or(mod, cfg_tmr_mode_full_module_insert_voter_before_modules_attr_name, default_cfg.tmr_mode_full_module_insert_voter_before_modules);
-    cfg.tmr_mode_full_module_insert_voter_after_modules = get_bool_atrr_value_or(mod, cfg_tmr_mode_full_module_insert_voter_after_modules_attr_name, default_cfg.tmr_mode_full_module_insert_voter_after_modules);
+    cfg.tmr_mode_full_module_insert_voter_before_modules = get_bool_attr_value_or(mod, cfg_tmr_mode_full_module_insert_voter_before_modules_attr_name, default_cfg.tmr_mode_full_module_insert_voter_before_modules);
+    cfg.tmr_mode_full_module_insert_voter_after_modules = get_bool_attr_value_or(mod, cfg_tmr_mode_full_module_insert_voter_after_modules_attr_name, default_cfg.tmr_mode_full_module_insert_voter_after_modules);
 
     cfg.clock_port_name = get_string_atrr_value_or(mod, cfg_clock_port_name_attr_name, default_cfg.clock_port_name);
     cfg.reset_port_name = get_string_atrr_value_or(mod, cfg_rst_port_name_attr_name, default_cfg.reset_port_name);
 
-    cfg.expand_clock = get_bool_atrr_value_or(mod, cfg_expand_clock_attr_name, default_cfg.expand_clock);
-    cfg.expand_reset = get_bool_atrr_value_or(mod, cfg_expand_rst_attr_name, default_cfg.expand_reset);
+    cfg.expand_clock = get_bool_attr_value_or(mod, cfg_expand_clock_attr_name, default_cfg.expand_clock);
+    cfg.expand_reset = get_bool_attr_value_or(mod, cfg_expand_rst_attr_name, default_cfg.expand_reset);
 
     cfg.logic_path_1_suffix = get_string_atrr_value_or(mod, cfg_logic_path_1_suffix_attr_name, default_cfg.logic_path_1_suffix);
     cfg.logic_path_2_suffix = get_string_atrr_value_or(mod, cfg_logic_path_2_suffix_attr_name, default_cfg.logic_path_2_suffix);
@@ -231,7 +231,7 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
         } else {
             if(!group_name.empty()){
             Yosys::log_warning("Group %s for module %s does not exist, proceeding with default",
-                               group_name, mod_name);
+                               group_name.c_str(), mod_name.c_str());
 
             }
         }
@@ -309,7 +309,7 @@ std::string ConfigManager::cfg_as_string(Yosys::RTLIL::Module *mod) const {
 
     ret += "TMR-Voter " + tmr_voter + "\n";
 
-    ret += "Preserve Mod Ports " + (mcfg->preserv_module_ports ? true_str : false_str) + "\n";
+    ret += "Preserve Mod Ports " + (mcfg->preserve_module_ports ? true_str : false_str) + "\n";
 
     ret += "Insert Voter before ff " + (mcfg->insert_voter_before_ff ? true_str : false_str) + "\n";
 
@@ -336,8 +336,8 @@ std::string ConfigManager::cfg_as_string(Yosys::RTLIL::Module *mod) const {
     }
     ret += "]\n";
 
-    ret += "Excldet FF Cells: [";
-    for (auto cell : mcfg->excludet_ff_cells){
+    ret += "Exclded FF Cells: [";
+    for (auto cell : mcfg->excluded_ff_cells){
         ret += cell.str() + ", ";
     }
     ret += "]\n";

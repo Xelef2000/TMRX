@@ -32,7 +32,7 @@ struct TmrxPass : public Pass {
 
     bool is_flip_flop(const RTLIL::Cell *cell, const RTLIL::Module *module, const Config *cfg) {
 
-      if(cfg->excludet_ff_cells.count(cell->type) != 0){
+      if(cfg->excluded_ff_cells.count(cell->type) != 0){
           return false;
       }
 
@@ -75,7 +75,7 @@ struct TmrxPass : public Pass {
             outputs.push_back(conn.first);
           }
           if( cell->input(conn.first)){
-              outputs.push_back(conn.first);
+              inputs.push_back(conn.first);
           }
         }
       }
@@ -154,7 +154,7 @@ struct TmrxPass : public Pass {
 
         for(auto w : wires){
             // TODO: verify if this actually works, fix no clk/rst expansion
-            if((cfg->preserv_module_ports && w->port_input) || (w->name == cfg->clock_port_name && !cfg->expand_clock) || (w->name == cfg->reset_port_name && !cfg->expand_reset)){
+            if((cfg->preserve_module_ports && w->port_input) || (w->name == cfg->clock_port_name && !cfg->expand_clock) || (w->name == cfg->reset_port_name && !cfg->expand_reset)){
                 wire_map[w] = w;
                 continue;
             }
@@ -228,7 +228,7 @@ struct TmrxPass : public Pass {
     void rename_wires_and_cells(RTLIL::Module *mod, std::vector<RTLIL::Wire*> wires, std::vector<RTLIL::Cell*> cells, std::string suffix, const Config *cfg){
         log_header(mod->design, "Renaming wires with suffix %s\n", suffix.c_str());
         for (auto w : wires) {
-          if ((cfg->preserv_module_ports && (w->port_input)) ||
+          if ((cfg->preserve_module_ports && (w->port_input)) ||
               (w->has_attribute(ID(tmrx_error_sink)))) {
             continue;
           }
@@ -433,10 +433,10 @@ struct TmrxPass : public Pass {
         std::vector<RTLIL::Wire*> error_wires;
 
         log_header(mod->design, "Logic TMR expansion");
-        auto [wiremap_b, outputmapt_b, flipflopmap_b] = insert_duplicate_logic(mod, original_wires, original_cells, original_connections, cfg->logic_path_2_suffix, cfg);
-        auto [wiremap_c, outputmapt_c, flipflopmap_c] = insert_duplicate_logic(mod, original_wires, original_cells, original_connections, cfg->logic_path_3_suffix, cfg);
+        auto [wiremap_b, outputmap_b, flipflopmap_b] = insert_duplicate_logic(mod, original_wires, original_cells, original_connections, cfg->logic_path_2_suffix, cfg);
+        auto [wiremap_c, outputmap_c, flipflopmap_c] = insert_duplicate_logic(mod, original_wires, original_cells, original_connections, cfg->logic_path_3_suffix, cfg);
 
-        dict<RTLIL::Wire*, std::pair<RTLIL::Wire*, RTLIL::Wire*>> combined_output_map = zip_dicts(outputmapt_b, outputmapt_c);
+        dict<RTLIL::Wire*, std::pair<RTLIL::Wire*, RTLIL::Wire*>> combined_output_map = zip_dicts(outputmap_b, outputmap_c);
         dict<RTLIL::SigSpec, std::pair<RTLIL::SigSpec, RTLIL::SigSpec>> combined_wire_map = zip_dicts(wiremap_b, wiremap_c);
         dict<RTLIL::Cell*, std::pair<RTLIL::Cell*, RTLIL::Cell*>> combined_ff_map = zip_dicts(flipflopmap_b, flipflopmap_c);
 
@@ -448,7 +448,7 @@ struct TmrxPass : public Pass {
             const Config *cell_cfg = cfg_mgr->cfg(cell_mod);
             std::vector<RTLIL::Wire*> v_err_w;
 
-            if(cell_cfg->preserv_module_ports){
+            if(cell_cfg->preserve_module_ports){
                 v_err_w = connect_submodules_preserver_mod_ports(mod, cell, combined_wire_map);
             } else {
                 v_err_w = connect_submodules_mod_ports(mod, cell, cell_cfg, combined_wire_map);
@@ -461,7 +461,7 @@ struct TmrxPass : public Pass {
 
 
 
-        if(cfg->preserv_module_ports){
+        if(cfg->preserve_module_ports){
             auto v_err_w = insert_output_voters(mod, combined_output_map, cfg);
             error_wires.insert(error_wires.end(), v_err_w.begin(), v_err_w.end());
         }

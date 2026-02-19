@@ -50,7 +50,7 @@ struct Config{
 
     TmrVoter tmr_voter;
 
-    bool preserv_module_ports;
+    bool preserve_module_ports;
 
     bool insert_voter_before_ff;
     bool insert_voter_after_ff;
@@ -66,7 +66,7 @@ struct Config{
 
     Yosys::pool<Yosys::RTLIL::IdString> ff_cells;
     Yosys::pool<Yosys::RTLIL::IdString> additional_ff_cells;
-    Yosys::pool<Yosys::RTLIL::IdString> excludet_ff_cells;
+    Yosys::pool<Yosys::RTLIL::IdString> excluded_ff_cells;
 
     std::string logic_path_1_suffix;
     std::string logic_path_2_suffix;
@@ -80,8 +80,8 @@ struct ConfigManager{
         void load_default_groups_cfg();
         void validate_cfg();
         std::string get_string_atrr_value_or(const Yosys::RTLIL::Module *mod,const std::string& attr, const std::string &def);
-        bool get_bool_atrr_value_or(const Yosys::RTLIL::Module *mod,const std::string& attr, bool def);
-        int get_int_atrr_value_or(const Yosys::RTLIL::Module *mod,const std::string& attr, int def);
+        bool get_bool_attr_value_or(const Yosys::RTLIL::Module *mod,const std::string& attr, bool def);
+        int get_int_attr_value_or(const Yosys::RTLIL::Module *mod,const std::string& attr, int def);
         Config parse_config(const toml::value &t, const Config &default_cfg);
         Config parse_module_annotations(const Yosys::RTLIL::Module *mod, const Config &default_cfg);
 
