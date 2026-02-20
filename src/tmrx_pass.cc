@@ -5,6 +5,7 @@
 #include "kernel/yosys_common.h"
 #include "tmrx.h"
 #include "utils.h"
+#include <cmath>
 #include <cstddef>
 #include <string>
 #include <tuple>
@@ -685,7 +686,6 @@ struct TmrxPass : public Pass {
 
     }
 
-    // Todo: check allow for driven error signal
     void connect_error_signal(RTLIL::Module *mod, std::vector<RTLIL::Wire*> error_signals){
         log_header(mod->design, "Connecting Error Signals");
 
@@ -702,12 +702,22 @@ struct TmrxPass : public Pass {
           }
         }
         if (sink != nullptr && !error_signals.empty()) {
-          RTLIL::SigSpec last_wire = error_signals.back();
-          error_signals.pop_back();
+          RTLIL::IdString sink_name = sink->name;
+          mod->rename(sink,mod->uniquify(sink_name.str() + "_old"));
+          RTLIL::Wire *new_error = mod->addWire(sink_name, sink->width);
+
+
+       	  new_error->port_output = true;
+          sink->port_output = false;
+          new_error->upto = sink->upto;
+          new_error->attributes = sink->attributes;
+          sink->attributes.clear();
+
+          RTLIL::SigSpec last_wire = sink;
           for (auto s : error_signals) {
             last_wire = mod->Or(NEW_ID, last_wire, s);
           }
-          mod->connect(sink, last_wire);
+          mod->connect(new_error, last_wire);
         }
     }
 

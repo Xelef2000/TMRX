@@ -19,7 +19,8 @@ module top (
         .rst_ni(rst_ni),
         .a_i(in0_i),
         .b_i(sig_q),
-        .y_o(res_y)
+        .y_o(res_y),
+        .err_o(err_o)
     );
 
 
