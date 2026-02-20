@@ -23,7 +23,7 @@ module top (
     );
 
 
-    always @(posedge clk_i or posedge rst_ni) begin
+    always @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni)
             sig_q <= 1'b0;
         else
@@ -48,7 +48,7 @@ module submodule (
 
     wire d = (a_i & b_i) ^ q;
 
-    always @(posedge clk_i or posedge rst_ni) begin
+    always @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni)
             q <= 1'b0;
         else

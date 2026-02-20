@@ -102,6 +102,9 @@ Config ConfigManager::parse_config(const toml::value &t, const Config &default_c
     cfg.reset_port_name = toml::find_or(t, "reset_port_name", default_cfg.reset_port_name);
     cfg.expand_reset = toml::find_or(t, "expand_reset", default_cfg.expand_reset);
 
+    cfg.tmr_mode_full_module_insert_voter_after_modules = toml::find_or(t, "tmr_mode_full_module_insert_voter_after_modules", default_cfg.tmr_mode_full_module_insert_voter_after_modules);
+    cfg.tmr_mode_full_module_insert_voter_before_modules = toml::find_or(t, "tmr_mode_full_module_insert_voter_before_modules", default_cfg.tmr_mode_full_module_insert_voter_after_modules);
+
     cfg.logic_path_1_suffix = toml::find_or(t, "logic_path_1_suffix", cfg.logic_path_1_suffix);
     cfg.logic_path_2_suffix = toml::find_or(t, "logic_path_2_suffix", cfg.logic_path_2_suffix);
     cfg.logic_path_3_suffix = toml::find_or(t, "logic_path_3_suffix", cfg.logic_path_3_suffix);

@@ -1,8 +1,7 @@
-#include "config_manager.h"
-#include "kernel/hashlib.h"
 #include "kernel/log.h"
-#include "kernel/register.h"
 #include "kernel/rtlil.h"
+#include "kernel/yosys.h"
+#include "kernel/yosys_common.h"
 #include "tmrx.h"
 #include "utils.h"
 #include <cstddef>
@@ -87,6 +86,7 @@ struct TmrxPass : public Pass {
       // TODO: make voter behaviour more predictable
       RTLIL::IdString voter_name =
           "\\tmrx_simple_voter_" + std::to_string(wire_width);
+
       if (design->module(voter_name) != nullptr) {
         return voter_name;
       }
@@ -122,6 +122,11 @@ struct TmrxPass : public Pass {
       return voter_name;
     }
 
+    bool is_tmr_error_out_wire(RTLIL::Wire* w){
+        return (w->has_attribute(ID(tmrx_error_sink)));
+    }
+
+    // TODO: remove mod and design
     std::pair<RTLIL::Wire *, RTLIL::Wire *>
     insert_voter(RTLIL::Module *module, std::vector<RTLIL::SigSpec> inputs,
                  RTLIL::Design *design) {
@@ -160,7 +165,7 @@ struct TmrxPass : public Pass {
             }
 
             // TODO: move attr to header
-            if (w->has_attribute(ID(tmrx_error_sink))){
+            if (is_tmr_error_out_wire(w)){
                 continue;
             }
 
@@ -423,7 +428,7 @@ struct TmrxPass : public Pass {
     }
 
 
-    std::vector<RTLIL::Wire*> logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr){
+    void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr){
         const Config *cfg = cfg_mgr->cfg(mod);
         std::vector<RTLIL::Wire*> error_signals = {};
 
@@ -478,10 +483,173 @@ struct TmrxPass : public Pass {
         }
 
 
-        return error_wires;
+        connect_error_signal(mod, error_signals);
     }
 
+    void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg){
+        std::vector<RTLIL::Wire*> error_wires;
 
+        RTLIL::IdString org_mod_name = mod->name;
+        std::string mod_name = mod->name.str() + "_tmrx_worker";
+
+        mod->design->rename(mod, mod_name);
+        RTLIL::Module *wrapper = mod->design->addModule(org_mod_name);
+        dict<RTLIL::Wire*, std::vector<RTLIL::Wire*>> wire_map;
+
+
+
+        std::vector<std::string> suffixes = (cfg->preserve_module_ports ? std::vector<std::string>{""} : std::vector<std::string>{cfg->logic_path_1_suffix, cfg->logic_path_2_suffix, cfg->logic_path_3_suffix});
+
+        for(size_t i = 0; i < 3; i++){
+            for (auto w : mod->wires()) {
+                if(w->port_id == 0){
+                    continue;
+                }
+                bool is_error_w = is_tmr_error_out_wire(w);
+
+                if((cfg->preserve_module_ports || is_error_w)&& i > 0 ){
+                    wire_map[w].push_back(wire_map.at(w).at(0));
+                    continue;
+                }
+
+                string new_wire_name = (w->name.str() + (is_error_w ? "" : suffixes.at(i)));
+
+    			RTLIL::Wire *w_b = wrapper->addWire(new_wire_name, w->width);
+    			w_b->port_input = w->port_input;
+    			w_b->port_output = w->port_output;
+                w_b->start_offset = w->start_offset;
+                w_b->upto = w->upto;
+                w_b->attributes = w->attributes;
+                wire_map[w].push_back(w_b);
+            }
+        }
+		wrapper->fixup_ports();
+
+		std::vector<RTLIL::Cell*> dublicates;
+		std::vector<dict<RTLIL::Wire*, RTLIL::Wire*>> cell_ports;
+
+
+
+		for(size_t i = 0; i < 3; i++){
+	        RTLIL::Cell *cell = wrapper->addCell(NEW_ID, mod_name);
+			dublicates.push_back(cell);
+
+			cell_ports.push_back({});
+
+			for(auto w :mod->wires()){
+			    if(w->port_id == 0 ){
+							continue;
+				}
+				RTLIL::Wire *w_con = wrapper->addWire(NEW_ID, w->width);
+				cell_ports.at(i)[(w)] = w_con;
+				cell->setPort(w->name, w_con);
+
+				if(is_tmr_error_out_wire(w)){
+                    error_wires.push_back(w_con);
+				}
+
+			}
+
+		}
+
+
+		if(cfg->tmr_mode_full_module_insert_voter_before_modules && !cfg->preserve_module_ports){
+            for(auto wm : wire_map){
+                if( !wm.first->port_input){
+                        continue;
+                }
+
+                std::vector<RTLIL::Wire*> voter_outs;
+
+                for (size_t i = 0; i < 3 ; i++) {
+                    auto [v_out, err] = insert_voter(wrapper, {wm.second.at(0), wm.second.at(1), wm.second.at(2)}, wrapper->design);
+                    error_wires.push_back(err);
+                    voter_outs.push_back(v_out);
+    			}
+
+                wire_map[wm.first] = voter_outs;
+    		}
+		}
+
+		if(cfg->tmr_mode_full_module_insert_voter_after_modules && !cfg->preserve_module_ports){
+            for(auto wm : wire_map){
+                if( !wm.first->port_output || is_tmr_error_out_wire(wm.first)){
+                        continue;
+                }
+
+                std::vector<RTLIL::Wire*> voter_outs;
+
+                for (size_t i = 0; i < 3 ; i++) {
+                    auto [v_out, err] = insert_voter(wrapper, {cell_ports.at(0).at(wm.first), cell_ports.at(1).at(wm.first), cell_ports.at(2).at(wm.first)}, wrapper->design);
+                    error_wires.push_back(err);
+                    voter_outs.push_back(v_out);
+    			}
+
+                cell_ports.at(0).at(wm.first) = voter_outs.at(0);
+                cell_ports.at(1).at(wm.first) = voter_outs.at(1);
+                cell_ports.at(2).at(wm.first) = voter_outs.at(2);
+
+    		}
+		}
+
+
+
+		if(cfg->preserve_module_ports){
+            for(auto wm : wire_map){
+                if(wm.first->port_output){
+
+                    if(is_tmr_error_out_wire(wm.first)){
+                        continue;
+                    }
+
+                    auto [v_out, err] = insert_voter(wrapper, {cell_ports.at(0).at(wm.first), cell_ports.at(1).at(wm.first), cell_ports.at(2).at(wm.first)}, wrapper->design);
+                    error_wires.push_back(err);
+                    cell_ports.at(0).at(wm.first) = v_out;
+                    cell_ports.at(1).at(wm.first) = v_out;
+                    cell_ports.at(2).at(wm.first) = v_out;
+                }
+            }
+		}
+
+
+		for (size_t i = 0; i < 3 ; i++) {
+		    for(auto wm : wire_map){
+				if(is_tmr_error_out_wire(wm.first)){
+                    continue;
+				}
+                wrapper->connect(wm.second.at(i), cell_ports.at(i).at(wm.first));
+			}
+		}
+
+
+
+
+		connect_error_signal(wrapper, error_wires);
+
+    }
+
+    // Todo: check allow for driven error signal
+    void connect_error_signal(RTLIL::Module *mod, std::vector<RTLIL::Wire*> error_signals){
+        log_header(mod->design, "Connecting Error Signals");
+
+        RTLIL::Wire *sink = nullptr;
+        for (auto w : mod->wires()) {
+          if (is_tmr_error_out_wire(w)) {
+            if (sink != nullptr) {
+              log_error("Duplicate error sinks, only one allowed");
+            }
+            sink = w;
+          }
+        }
+        if (sink != nullptr && !error_signals.empty()) {
+          RTLIL::SigSpec last_wire = error_signals.back();
+          error_signals.pop_back();
+          for (auto s : error_signals) {
+            last_wire = mod->Or(NEW_ID, last_wire, s);
+          }
+          mod->connect(sink, last_wire);
+        }
+    }
 
     void execute(std::vector<std::string> args, RTLIL::Design *design) override {
         log_header(design, "Executing TMRX pass (Triple Modular Redundancy).\n");
@@ -539,34 +707,26 @@ struct TmrxPass : public Pass {
                continue;
 
              log("Processing Module %s\n", mod_name.c_str());
+             log_pop();
+             log_push();
 
-             std::vector<RTLIL::Wire*> error_signals;
+
 
              if(cfg_mgr.cfg(worker)->tmr_mode == Config::TmrMode::None){
                  continue;
              }
 
              if (cfg_mgr.cfg(worker)->tmr_mode == Config::TmrMode::LogicTMR) {
-                 error_signals = logic_tmr_expansion(worker, &cfg_mgr);
+                  logic_tmr_expansion(worker, &cfg_mgr);
              }
 
-             RTLIL::Wire *sink = nullptr;
-             for (auto w : worker->wires()) {
-               if (w->has_attribute(ID(tmrx_error_sink))) {
-                 if (sink != nullptr) {
-                   log_error("Duplicate error sinks, only one allowed");
-                 }
-                 sink = w;
-               }
+             if (cfg_mgr.cfg(worker)->tmr_mode == Config::TmrMode::FullModuleTMR){
+                 full_module_tmr_expansion(worker, cfg_mgr.cfg(worker));
              }
-             if (sink != nullptr && !error_signals.empty()) {
-               RTLIL::SigSpec last_wire = error_signals.back();
-               error_signals.pop_back();
-               for (auto s : error_signals) {
-                 last_wire = worker->Or(NEW_ID, last_wire, s);
-               }
-               worker->connect(sink, last_wire);
-             }
+
+
+
+
 
              worker->fixup_ports();
          }
