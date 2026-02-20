@@ -44,23 +44,27 @@ void ConfigManager::load_default_groups_cfg() {
     // TODO: add top module
 }
 
-std::string ConfigManager::get_string_attr_value_or(const Yosys::RTLIL::Module *mod,const std::string& attr, const std::string &def){
+std::string ConfigManager::get_string_attr_value_or(const Yosys::RTLIL::Module *mod,
+                                                    const std::string &attr,
+                                                    const std::string &def) {
     std::string ret = def;
-    if(mod->has_attribute(attr)){
+    if (mod->has_attribute(attr)) {
         ret = mod->get_string_attribute(attr);
     }
     return ret;
 }
-bool ConfigManager::get_bool_attr_value_or(const Yosys::RTLIL::Module *mod,const std::string& attr, bool def){
+bool ConfigManager::get_bool_attr_value_or(const Yosys::RTLIL::Module *mod, const std::string &attr,
+                                           bool def) {
     bool ret = def;
-    if(mod->has_attribute(attr)){
+    if (mod->has_attribute(attr)) {
         ret = (mod->get_string_attribute(attr)) == "1";
     }
-    return  ret;
+    return ret;
 }
-int ConfigManager::get_int_attr_value_or(const Yosys::RTLIL::Module *mod,const std::string& attr, int def){
+int ConfigManager::get_int_attr_value_or(const Yosys::RTLIL::Module *mod, const std::string &attr,
+                                         int def) {
     int ret = def;
-    if(mod->has_attribute(attr)){
+    if (mod->has_attribute(attr)) {
         ret = std::stoi(mod->get_string_attribute(attr));
     }
     return ret;
@@ -102,8 +106,12 @@ Config ConfigManager::parse_config(const toml::value &t, const Config &default_c
     cfg.reset_port_name = toml::find_or(t, "reset_port_name", default_cfg.reset_port_name);
     cfg.expand_reset = toml::find_or(t, "expand_reset", default_cfg.expand_reset);
 
-    cfg.tmr_mode_full_module_insert_voter_after_modules = toml::find_or(t, "tmr_mode_full_module_insert_voter_after_modules", default_cfg.tmr_mode_full_module_insert_voter_after_modules);
-    cfg.tmr_mode_full_module_insert_voter_before_modules = toml::find_or(t, "tmr_mode_full_module_insert_voter_before_modules", default_cfg.tmr_mode_full_module_insert_voter_after_modules);
+    cfg.tmr_mode_full_module_insert_voter_after_modules =
+        toml::find_or(t, "tmr_mode_full_module_insert_voter_after_modules",
+                      default_cfg.tmr_mode_full_module_insert_voter_after_modules);
+    cfg.tmr_mode_full_module_insert_voter_before_modules =
+        toml::find_or(t, "tmr_mode_full_module_insert_voter_before_modules",
+                      default_cfg.tmr_mode_full_module_insert_voter_after_modules);
 
     cfg.logic_path_1_suffix = toml::find_or(t, "logic_path_1_suffix", cfg.logic_path_1_suffix);
     cfg.logic_path_2_suffix = toml::find_or(t, "logic_path_2_suffix", cfg.logic_path_2_suffix);
@@ -145,23 +153,37 @@ Config ConfigManager::parse_module_annotations(const Yosys::RTLIL::Module *mod,
             cfg.tmr_voter = Config::TmrVoter::Default;
     }
 
-    cfg.preserve_module_ports = get_bool_attr_value_or(mod, cfg_tmr_preserve_module_ports_attr_name, default_cfg.preserve_module_ports);
+    cfg.preserve_module_ports = get_bool_attr_value_or(mod, cfg_tmr_preserve_module_ports_attr_name,
+                                                       default_cfg.preserve_module_ports);
 
-    cfg.insert_voter_before_ff = get_bool_attr_value_or(mod, cfg_insert_voter_before_ff_attr_name, default_cfg.insert_voter_before_ff);
-    cfg.insert_voter_after_ff = get_bool_attr_value_or(mod, cfg_insert_voter_after_ff_attr_name, default_cfg.insert_voter_after_ff);
+    cfg.insert_voter_before_ff = get_bool_attr_value_or(mod, cfg_insert_voter_before_ff_attr_name,
+                                                        default_cfg.insert_voter_before_ff);
+    cfg.insert_voter_after_ff = get_bool_attr_value_or(mod, cfg_insert_voter_after_ff_attr_name,
+                                                       default_cfg.insert_voter_after_ff);
 
-    cfg.tmr_mode_full_module_insert_voter_before_modules = get_bool_attr_value_or(mod, cfg_tmr_mode_full_module_insert_voter_before_modules_attr_name, default_cfg.tmr_mode_full_module_insert_voter_before_modules);
-    cfg.tmr_mode_full_module_insert_voter_after_modules = get_bool_attr_value_or(mod, cfg_tmr_mode_full_module_insert_voter_after_modules_attr_name, default_cfg.tmr_mode_full_module_insert_voter_after_modules);
+    cfg.tmr_mode_full_module_insert_voter_before_modules =
+        get_bool_attr_value_or(mod, cfg_tmr_mode_full_module_insert_voter_before_modules_attr_name,
+                               default_cfg.tmr_mode_full_module_insert_voter_before_modules);
+    cfg.tmr_mode_full_module_insert_voter_after_modules =
+        get_bool_attr_value_or(mod, cfg_tmr_mode_full_module_insert_voter_after_modules_attr_name,
+                               default_cfg.tmr_mode_full_module_insert_voter_after_modules);
 
-    cfg.clock_port_name = get_string_attr_value_or(mod, cfg_clock_port_name_attr_name, default_cfg.clock_port_name);
-    cfg.reset_port_name = get_string_attr_value_or(mod, cfg_rst_port_name_attr_name, default_cfg.reset_port_name);
+    cfg.clock_port_name =
+        get_string_attr_value_or(mod, cfg_clock_port_name_attr_name, default_cfg.clock_port_name);
+    cfg.reset_port_name =
+        get_string_attr_value_or(mod, cfg_rst_port_name_attr_name, default_cfg.reset_port_name);
 
-    cfg.expand_clock = get_bool_attr_value_or(mod, cfg_expand_clock_attr_name, default_cfg.expand_clock);
-    cfg.expand_reset = get_bool_attr_value_or(mod, cfg_expand_rst_attr_name, default_cfg.expand_reset);
+    cfg.expand_clock =
+        get_bool_attr_value_or(mod, cfg_expand_clock_attr_name, default_cfg.expand_clock);
+    cfg.expand_reset =
+        get_bool_attr_value_or(mod, cfg_expand_rst_attr_name, default_cfg.expand_reset);
 
-    cfg.logic_path_1_suffix = get_string_attr_value_or(mod, cfg_logic_path_1_suffix_attr_name, default_cfg.logic_path_1_suffix);
-    cfg.logic_path_2_suffix = get_string_attr_value_or(mod, cfg_logic_path_2_suffix_attr_name, default_cfg.logic_path_2_suffix);
-    cfg.logic_path_3_suffix = get_string_attr_value_or(mod, cfg_logic_path_3_suffix_attr_name, default_cfg.logic_path_3_suffix);
+    cfg.logic_path_1_suffix = get_string_attr_value_or(mod, cfg_logic_path_1_suffix_attr_name,
+                                                       default_cfg.logic_path_1_suffix);
+    cfg.logic_path_2_suffix = get_string_attr_value_or(mod, cfg_logic_path_2_suffix_attr_name,
+                                                       default_cfg.logic_path_2_suffix);
+    cfg.logic_path_3_suffix = get_string_attr_value_or(mod, cfg_logic_path_3_suffix_attr_name,
+                                                       default_cfg.logic_path_3_suffix);
     return cfg;
 }
 
@@ -174,7 +196,8 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
     try {
         t = toml::parse(cfg_file);
     } catch (const std::exception &e) {
-        Yosys::log_warning("Tmrx was unable to load cfg file, will proceed with default config and annotation '%s': %s. Using defaults.",
+        Yosys::log_warning("Tmrx was unable to load cfg file, will proceed with default config and "
+                           "annotation '%s': %s. Using defaults.",
                            cfg_file.c_str(), e.what());
     }
 
@@ -185,7 +208,7 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
 
     Yosys::log_header(design, "Parsing global cfg");
 
-    if(t.contains("global")){
+    if (t.contains("global")) {
         global_cfg = parse_config(t.at("global"), global_cfg);
     }
 
@@ -215,7 +238,7 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
 
     Yosys::log_header(design, "Parsing module attrs cfg");
     for (auto module : design->modules()) {
-        if(!(module->has_attribute(ATTRIBUTE_IS_PROPER_SUBMODULE))){
+        if (!(module->has_attribute(ATTRIBUTE_IS_PROPER_SUBMODULE))) {
             continue;
         }
         Yosys::RTLIL::IdString mod_name = module->name;
@@ -223,7 +246,8 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
 
         Config def = global_cfg;
 
-        std::string group_name = get_string_attr_value_or(module, cfg_group_assignment_attr_name ,"");
+        std::string group_name =
+            get_string_attr_value_or(module, cfg_group_assignment_attr_name, "");
 
         if (group_assignments.count(mod_name) > 0) {
             group_name = group_assignments[mod_name];
@@ -232,25 +256,26 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
         if (group_cfg.count(group_name) > 0) {
             def = group_cfg[group_name];
         } else {
-            if(!group_name.empty()){
-            Yosys::log_warning("Group %s for module %s does not exist, proceeding with default",
-                               group_name.c_str(), mod_name.c_str());
-
+            if (!group_name.empty()) {
+                Yosys::log_warning("Group %s for module %s does not exist, proceeding with default",
+                                   group_name.c_str(), mod_name.c_str());
             }
         }
 
-        if(module->has_memories() || module->has_processes()){
+        if (module->has_memories() || module->has_processes()) {
             group_name = "black_box_module";
             def = group_cfg[group_name];
-            Yosys::log_warning("Module %s contains memories or processes, module will be treated as black box", mod_name.c_str());
+            Yosys::log_warning(
+                "Module %s contains memories or processes, module will be treated as black box",
+                mod_name.c_str());
         }
 
-        if(module->get_blackbox_attribute() || module->has_memories() || module->has_processes()){
+        if (module->get_blackbox_attribute() || module->has_memories() || module->has_processes()) {
             group_name = "black_box_module";
             def = group_cfg[group_name];
         }
 
-        if(!group_name.empty()){
+        if (!group_name.empty()) {
             group_assignments[mod_name] = group_name;
         }
         // Yosys::log_header(design, "creating id string");
@@ -279,15 +304,13 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
     }
 }
 
-const Config* ConfigManager::cfg(Yosys::RTLIL::Module *mod) const{
-    if(module_cfgs.count(mod->name) == 0){
+const Config *ConfigManager::cfg(Yosys::RTLIL::Module *mod) const {
+    if (module_cfgs.count(mod->name) == 0) {
         return &global_cfg;
     }
 
     return &module_cfgs.at(mod->name);
 }
-
-
 
 std::string ConfigManager::cfg_as_string(Yosys::RTLIL::Module *mod) const {
     const Config *mcfg = cfg(mod);
@@ -318,8 +341,10 @@ std::string ConfigManager::cfg_as_string(Yosys::RTLIL::Module *mod) const {
 
     ret += "Insert Voter after ff " + (mcfg->insert_voter_after_ff ? true_str : false_str) + "\n";
 
-    ret += "Tmr Mode full; insert voter before module " + (mcfg->tmr_mode_full_module_insert_voter_before_modules ? true_str : false_str) + "\n";
-    ret += "Tmr Mode full; insert voter after module " + (mcfg->tmr_mode_full_module_insert_voter_after_modules ? true_str : false_str) + "\n";
+    ret += "Tmr Mode full; insert voter before module " +
+           (mcfg->tmr_mode_full_module_insert_voter_before_modules ? true_str : false_str) + "\n";
+    ret += "Tmr Mode full; insert voter after module " +
+           (mcfg->tmr_mode_full_module_insert_voter_after_modules ? true_str : false_str) + "\n";
 
     ret += "Clock port name: " + mcfg->clock_port_name + "\n";
     ret += "Expand Clock net: " + (mcfg->expand_clock ? true_str : false_str) + "\n";
@@ -328,28 +353,26 @@ std::string ConfigManager::cfg_as_string(Yosys::RTLIL::Module *mod) const {
     ret += "Expand reset net: " + (mcfg->expand_reset ? true_str : false_str) + "\n";
 
     ret += "FF Cells: [";
-    for (auto cell : mcfg->ff_cells){
+    for (auto cell : mcfg->ff_cells) {
         ret += cell.str() + ", ";
     }
     ret += "]\n";
 
     ret += "Additional FF Cells: [";
-    for (auto cell : mcfg->additional_ff_cells){
+    for (auto cell : mcfg->additional_ff_cells) {
         ret += cell.str() + ", ";
     }
     ret += "]\n";
 
     ret += "Exclded FF Cells: [";
-    for (auto cell : mcfg->excluded_ff_cells){
+    for (auto cell : mcfg->excluded_ff_cells) {
         ret += cell.str() + ", ";
     }
     ret += "]\n";
 
-
     ret += "Logic path 1 suffix: " + mcfg->logic_path_1_suffix + "\n";
     ret += "Logic path 2 suffix: " + mcfg->logic_path_2_suffix + "\n";
     ret += "Logic path 3 suffix: " + mcfg->logic_path_3_suffix + "\n";
-
 
     return ret;
 }
