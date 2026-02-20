@@ -41,7 +41,9 @@ module submodule (
     input  wire rst_ni,
     input  wire a_i,
     input  wire b_i,
-    output wire y_o
+    output wire y_o,
+    (* tmrx_error_sink *)
+    output wire err_o
 );
 
     reg q;

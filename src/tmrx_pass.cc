@@ -412,7 +412,6 @@ struct TmrxPass : public Pass {
     }
 
 
-    // TODO: convert to void
     std::vector<RTLIL::Wire*> connect_submodules_mod_ports(RTLIL::Module *mod, RTLIL::Cell* cell, const Config *cell_cfg, dict<RTLIL::SigSpec, std::pair<RTLIL::SigSpec, RTLIL::SigSpec>> wire_map){
 
         std::vector<RTLIL::Wire*> error_signals;
@@ -439,6 +438,20 @@ struct TmrxPass : public Pass {
             log_error("No cell mod\n");
         }
 
+        for (auto &port : cell_mod->ports) {
+            RTLIL::Wire *port_wire = cell_mod->wire(port);
+            RTLIL::SigSpec sig;
+            log("Port %s, cnt :%i error: %i\n",  port.c_str(), orig_connections.count(port), is_tmr_error_out_wire(port_wire));
+            if (orig_connections.count(port) == 0 && is_tmr_error_out_wire(port_wire)){
+                RTLIL::Wire *err_wire = mod->addWire(NEW_ID, port_wire->width);
+                cell->setPort(port, err_wire);
+                error_signals.push_back(err_wire);
+            }
+
+
+            log("Looking at port %s, sig: %s\n", port.c_str(), log_signal(sig));
+        }
+
         for (auto &orig_conn : orig_connections){
             RTLIL::IdString port = orig_conn.first;
             RTLIL::Wire *port_wire = cell_mod->wire(port);
@@ -454,15 +467,13 @@ struct TmrxPass : public Pass {
           RTLIL::SigSpec sig_b = wire_map[sig].first;
           RTLIL::SigSpec sig_c = wire_map[sig].second;
 
-
-
           if( port_wire != nullptr && (is_tmr_error_out_wire(port_wire) || (is_clk_wire(port_wire,cell_cfg) && !cell_cfg->expand_clock) || (is_rst_wire(port_wire, cell_cfg) && !cell_cfg->expand_reset))){
               port_a =  RTLIL::IdString(port.str());
               port_b =  RTLIL::IdString(port.str());
               port_c =  RTLIL::IdString(port.str());
               sig_b = sig;
               sig_c = sig;
-          }
+              }
 
           cell->setPort(port_a, sig);
           cell->setPort(port_b, sig_b);
@@ -680,6 +691,9 @@ struct TmrxPass : public Pass {
 
         RTLIL::Wire *sink = nullptr;
         for (auto w : mod->wires()) {
+        if(!w->port_output){
+            continue;
+        }
           if (is_tmr_error_out_wire(w)) {
             if (sink != nullptr) {
               log_error("Duplicate error sinks, only one allowed");

@@ -1,6 +1,7 @@
 # Global configuration
 [global]
-tmr_mode = "FullModuleTMR"
+# tmr_mode = "FullModuleTMR"'
+tmr_mode = "LogicTMR"
 tmr_voter = "Default"
 preserv_module_ports = false
 insert_voter_before_ff = false
