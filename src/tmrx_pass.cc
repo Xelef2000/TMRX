@@ -525,14 +525,14 @@ struct TmrxPass : public Pass {
         }
 		wrapper->fixup_ports();
 
-		std::vector<RTLIL::Cell*> dublicates;
+		std::vector<RTLIL::Cell*> duplicates;
 		std::vector<dict<RTLIL::Wire*, RTLIL::Wire*>> cell_ports;
 
 
 
 		for(size_t i = 0; i < 3; i++){
 	        RTLIL::Cell *cell = wrapper->addCell(NEW_ID, mod_name);
-			dublicates.push_back(cell);
+			duplicates.push_back(cell);
 
 			cell_ports.push_back({});
 
