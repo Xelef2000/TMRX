@@ -496,8 +496,8 @@ struct TmrxPass : public Pass {
             RTLIL::IdString port_b = RTLIL::IdString(port.str() + cell_cfg->logic_path_2_suffix);
             RTLIL::IdString port_c = RTLIL::IdString(port.str() + cell_cfg->logic_path_3_suffix);
 
-            RTLIL::SigSpec sig_b = wire_map[sig].first;
-            RTLIL::SigSpec sig_c = wire_map[sig].second;
+            RTLIL::SigSpec sig_b = wire_map.at(sig).first;
+            RTLIL::SigSpec sig_c = wire_map.at(sig).second;
 
             if (port_wire != nullptr && (is_tmr_error_out_wire(port_wire) ||
                                          (is_clk_wire(port_wire, cell_cfg) &&
@@ -769,7 +769,6 @@ struct TmrxPass : public Pass {
             sink->port_output = false;
             new_error->upto = sink->upto;
             new_error->attributes = sink->attributes;
-            sink->attributes.clear();
             mod->fixup_ports();
 
             RTLIL::SigSpec last_wire = sink;
