@@ -1,5 +1,5 @@
-#ifndef TMRX_UTILS_H
-#define TMRX_UTILS_H
+#ifndef TMRX_STD_UTILS_H
+#define TMRX_STD_UTILS_H
 
 #include "kernel/sigtools.h"
 #include "kernel/yosys.h"

@@ -28,6 +28,9 @@ src_files = [
   'src/tmrx_pass.cc',
   'src/mark_pass.cc',
   'src/config_manager.cc',
+  'src/tmrx_logic_expansion.cc',
+  'src/tmrx_mod_expansion.cc',
+  'src/tmrx_utils.cc',
 ]
 
 tmrx = custom_target(
