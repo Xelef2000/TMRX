@@ -192,6 +192,8 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
     load_global_default_cfg();
     load_default_groups_cfg();
 
+    bool loaded_cfg = true;
+
     toml::value t;
     try {
         t = toml::parse(cfg_file);
@@ -199,6 +201,7 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
         Yosys::log_warning("Tmrx was unable to load cfg file, will proceed with default config and "
                            "annotation '%s': %s. Using defaults.",
                            cfg_file.c_str(), e.what());
+        loaded_cfg = false;
     }
 
     if (t.is_empty()) {
@@ -208,26 +211,27 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
 
     Yosys::log_header(design, "Parsing global cfg");
 
-    if (t.contains("global")) {
+    if (loaded_cfg && t.contains("global")) {
         global_cfg = parse_config(t.at("global"), global_cfg);
     }
 
     Yosys::log_header(design, "Parsing group cfgs");
+    if (loaded_cfg) {
+        for (auto &[table_name, table_value] : t.as_table()) {
+            if (table_name == "global" || table_name == "module_groups") {
+                continue;
+            }
 
-    for (auto &[table_name, table_value] : t.as_table()) {
-        if (table_name == "global" || table_name == "module_groups") {
-            continue;
-        }
-
-        if (table_name.rfind(cfg_group_prefix, 0) == 0) {
-            group_cfg[table_name.substr(cfg_group_prefix.size())] =
-                parse_config(table_value, global_cfg);
+            if (table_name.rfind(cfg_group_prefix, 0) == 0) {
+                group_cfg[table_name.substr(cfg_group_prefix.size())] =
+                    parse_config(table_value, global_cfg);
+            }
         }
     }
     Yosys::log_header(design, "Parsing group assignments");
     Yosys::dict<Yosys::RTLIL::IdString, std::string> group_assignments;
 
-    if (t.contains("module_groups")) {
+    if (loaded_cfg && t.contains("module_groups")) {
         const auto &module_groups_table = toml::get<toml::value>(t.at("module_groups"));
 
         for (auto &[mod_name, group_value] : module_groups_table.as_table()) {
@@ -285,21 +289,23 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
     // TODO: add automatic top module detection
     // TODO: prevent overwriting of black box
     Yosys::log_header(design, "Parsing module cfgs");
-    for (auto &[table_name, table_value] : t.as_table()) {
-        if (table_name == "global" || table_name == "module_groups") {
-            continue;
-        }
-
-        if (table_name.rfind(cfg_module_prefix, 0) == 0) {
-            Yosys::IdString mod_name = "\\" + (table_name.substr(cfg_module_prefix.size()));
-            if (module_cfgs.count(mod_name) == 0) {
-                Yosys::log_warning("Module %s does not exist in design", mod_name.c_str());
+    if (loaded_cfg) {
+        for (auto &[table_name, table_value] : t.as_table()) {
+            if (table_name == "global" || table_name == "module_groups") {
                 continue;
             }
 
-            Config def = module_cfgs[mod_name];
+            if (table_name.rfind(cfg_module_prefix, 0) == 0) {
+                Yosys::IdString mod_name = "\\" + (table_name.substr(cfg_module_prefix.size()));
+                if (module_cfgs.count(mod_name) == 0) {
+                    Yosys::log_warning("Module %s does not exist in design", mod_name.c_str());
+                    continue;
+                }
 
-            module_cfgs[mod_name] = parse_config(table_value, def);
+                Config def = module_cfgs[mod_name];
+
+                module_cfgs[mod_name] = parse_config(table_value, def);
+            }
         }
     }
 }
