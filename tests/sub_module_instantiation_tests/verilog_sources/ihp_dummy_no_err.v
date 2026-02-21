@@ -23,7 +23,6 @@ module top (
         .a_i(in0_i),
         .b_i(sig_q),
         .y_o(res_y),
-        // .err_o(err_o)
     );
 
 
@@ -46,8 +45,6 @@ module submodule (
     input  wire a_i,
     input  wire b_i,
     output wire y_o,
-    (* tmrx_error_sink *)
-    output wire err_o
 );
 
     reg q;

@@ -1,0 +1,31 @@
+# synth.ys.in
+read_verilog @VERILOG_FILE@
+hierarchy -check -top top
+
+proc; opt;
+
+techmap
+
+tmrx_mark
+
+read_liberty -lib @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+
+dfflibmap -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+abc -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+
+tmrx -c @TOML_FILE@
+write_verilog -noattr @TEST_NAME@_07_tmrx.v
+opt -noff
+techmap
+dfflibmap -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+abc -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib -D 1000
+
+opt_clean -purge
+
+clean
+write_verilog -noattr @TEST_NAME@_08_final.v
+write_json @TEST_NAME@_08_final.json
+show -format svg -prefix @TEST_NAME@_final_netlist top
+show -format dot -prefix @TEST_NAME@_final_netlist top
+
+stat -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib

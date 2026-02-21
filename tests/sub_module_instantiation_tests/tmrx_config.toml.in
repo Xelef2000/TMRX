@@ -1,54 +1,34 @@
-# Global configuration
 [global]
-# tmr_mode = "FullModuleTMR"
-tmr_mode = "LogicTMR"
+tmr_mode = @G_TMR_MODE@
 tmr_voter = "Default"
-preserv_module_ports = true
+preserv_module_ports = @G_PRESERV@
 insert_voter_before_ff = false
 insert_voter_after_ff = true
 tmr_mode_full_module_insert_voter_before_modules = true
 tmr_mode_full_module_insert_voter_after_modules = true
 clock_port_name = "\\clk_i"
-expand_clock = false
+expand_clock = @G_EXPAND_CLK@
 reset_port_name = "\\rst_ni"
-expand_reset = false
+expand_reset = @G_EXPAND_RST@
 ff_cells = ["DFF", "FDRE"]
 additional_ff_cells = ["FDCE"]
 excluded_ff_cells = ["FDSE"]
 logic_path_1_suffix = "_a"
 logic_path_2_suffix = "_b"
 logic_path_3_suffix = "_c"
-
 
 [module_submodule]
-# tmr_mode = "FullModuleTMR"
-tmr_mode = "LogicTMR"
+tmr_mode = @M_TMR_MODE@
 tmr_voter = "Default"
-preserv_module_ports = false
+preserv_module_ports = @M_PRESERV@
 insert_voter_before_ff = false
 insert_voter_after_ff = true
 tmr_mode_full_module_insert_voter_before_modules = true
 tmr_mode_full_module_insert_voter_after_modules = true
 clock_port_name = "\\clk_i"
-expand_clock = false
+expand_clock = @M_EXPAND_CLK@
 reset_port_name = "\\rst_ni"
-expand_reset = false
-ff_cells = ["DFF", "FDRE"]
-additional_ff_cells = ["FDCE"]
-excluded_ff_cells = ["FDSE"]
+expand_reset = @M_EXPAND_RST@
 logic_path_1_suffix = "_a"
 logic_path_2_suffix = "_b"
 logic_path_3_suffix = "_c"
-
-[module_groups]
-mod1 = "groupA"
-mod2 = "groupB"
-
-
-[groupA]
-tmr_mode = "LogicTMR"
-insert_voter_before_ff = true
-
-[groupB]
-tmr_voter = "Default"
-expand_clock = false

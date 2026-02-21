@@ -15,6 +15,9 @@ module top (
     wire nclk;
 
     assign sig_d = res_y ^ in1_i;
+    wire sub_err;
+
+    assign err_o = !sub_err;
 
 
     submodule u_sub (
@@ -23,8 +26,9 @@ module top (
         .a_i(in0_i),
         .b_i(sig_q),
         .y_o(res_y),
-        // .err_o(err_o)
+        .err_o(sub_err)
     );
+
 
 
     always @(posedge clk_i or negedge rst_ni) begin

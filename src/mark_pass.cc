@@ -33,7 +33,8 @@ struct TMRXMarkPass : public Pass {
                 // mark submodules
                 for (auto c : module->cells()) {
                     if (design->module(c->type) != nullptr) {
-                        design->module(c->type)->set_bool_attribute(ATTRIBUTE_IS_PROPER_SUBMODULE, true);
+                        design->module(c->type)->set_bool_attribute(ATTRIBUTE_IS_PROPER_SUBMODULE,
+                                                                    true);
                     }
                 }
             }

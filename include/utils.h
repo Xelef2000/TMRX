@@ -7,10 +7,12 @@
 YOSYS_NAMESPACE_BEGIN
 
 template <typename T, typename Q>
-hashlib::dict<T, std::pair<Q, Q>> zip_dicts(const hashlib::dict<T, Q> &a, const hashlib::dict<T, Q> &b) {
+hashlib::dict<T, std::pair<Q, Q>> zip_dicts(const hashlib::dict<T, Q> &a,
+                                            const hashlib::dict<T, Q> &b) {
 
     if (a.size() != b.size()) {
-        log_error("zip_dicts: dicts have different sizes [Dict 1: %zu, Dict 2: %zu]\n", a.size(), b.size());
+        log_error("zip_dicts: dicts have different sizes [Dict 1: %zu, Dict 2: %zu]\n", a.size(),
+                  b.size());
     }
 
     hashlib::dict<T, std::pair<Q, Q>> result;
