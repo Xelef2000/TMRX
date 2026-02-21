@@ -47,6 +47,8 @@
 .vscode/settings.json
 
 #IHP dir
+IHP-Open-PDK/
+IHP-Open-PDK/*
 IHP-Open-PDK
 
 # cache
