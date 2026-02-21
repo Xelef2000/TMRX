@@ -23,7 +23,7 @@ module top (
         .a_i(in0_i),
         .b_i(sig_q),
         .y_o(res_y),
-        // .err_o(err_o)
+        .err_o(err_o)
     );
 
 

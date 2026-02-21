@@ -23,6 +23,7 @@ module top (
         .a_i(in0_i),
         .b_i(sig_q),
         .y_o(res_y),
+        .clock_no(nclk),
         // .err_o(err_o)
     );
 
@@ -34,7 +35,14 @@ module top (
             sig_q <= sig_d;
     end
 
-    assign out_o = sig_q;
+    always @(posedge nclk or negedge rst_ni) begin
+        if (!rst_ni)
+            nsig_q <= 1'b0;
+        else
+            nsig_q <= sig_d;
+    end
+
+    assign out_o = sig_q & nsig_q;
 
 endmodule
 
@@ -46,6 +54,8 @@ module submodule (
     input  wire a_i,
     input  wire b_i,
     output wire y_o,
+    (* tmrx_clk_port *)
+    output wire clock_no,
     (* tmrx_error_sink *)
     output wire err_o
 );
