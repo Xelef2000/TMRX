@@ -193,6 +193,7 @@ struct TmrxPass : public Pass {
 
             // TODO: move attr to header
             if (is_tmr_error_out_wire(w)){
+                wire_map[w] = w;
                 continue;
             }
 
@@ -372,7 +373,7 @@ struct TmrxPass : public Pass {
 
 
     std::vector<RTLIL::Wire*> connect_submodules_preserver_mod_ports(RTLIL::Module *mod, RTLIL::Cell* cell, dict<RTLIL::SigSpec, std::pair<RTLIL::SigSpec, RTLIL::SigSpec>> wire_map){
-
+        log_header(mod->design, "Connect sub pre por\n");
         std::vector<RTLIL::Wire*> error_signals;
         RTLIL::Design *design = mod->design;
 
@@ -385,20 +386,54 @@ struct TmrxPass : public Pass {
 
         // TODO: Optimization do not insert voter if input into submodule is
         // input into worker module
+        //
+        //
+
+        RTLIL::Module *cell_mod = design->module(cell->type);
+        if(cell_mod == nullptr){
+            log_error("No cell mod\n");
+        }
+
+        dict<RTLIL::IdString, RTLIL::SigSpec> orig_connections;
+                for (auto &conn : cell->connections()) {
+                    orig_connections[conn.first] = conn.second;
+        }
+
+        for (auto &port : cell_mod->ports) {
+            RTLIL::Wire *port_wire = cell_mod->wire(port);
+            RTLIL::SigSpec sig;
+            log("Port %s, cnt :%i error: %i\n",  port.c_str(), orig_connections.count(port), is_tmr_error_out_wire(port_wire));
+            if (orig_connections.count(port) == 0 && is_tmr_error_out_wire(port_wire)){
+                RTLIL::Wire *err_wire = mod->addWire(NEW_ID, port_wire->width);
+                cell->setPort(port, err_wire);
+                error_signals.push_back(err_wire);
+            }
+
+
+            log("Looking at port %s, sig: %s\n", port.c_str(), log_signal(sig));
+        }
+
+
 
         for (auto port : input_ports) {
           RTLIL::SigSpec sig_a = cell->getPort(port);
+
           RTLIL::SigSpec sig_b = wire_map.at(sig_a).first;
           RTLIL::SigSpec sig_c = wire_map.at(sig_a).second;
           std::vector<RTLIL::SigSpec> inputs = {sig_a, sig_b, sig_c};
 
+
           std::pair<RTLIL::Wire *, RTLIL::Wire *> res = insert_voter(mod, inputs, design);
           error_signals.push_back(res.second);
           cell->setPort(port, res.first);
+
+
+
         }
 
         for (auto port : output_ports) {
           RTLIL::SigSpec sig_a = cell->getPort(port);
+
           RTLIL::SigSpec sig_b = wire_map.at(sig_a).first;
           RTLIL::SigSpec sig_c = wire_map.at(sig_a).second;
 
@@ -511,6 +546,7 @@ struct TmrxPass : public Pass {
             const Config *cell_cfg = cfg_mgr->cfg(cell_mod);
             std::vector<RTLIL::Wire*> v_err_w;
 
+            log_header(mod->design, "Connecting submodules\n");
             if(cell_cfg->preserve_module_ports){
                 v_err_w = connect_submodules_preserver_mod_ports(mod, cell, combined_wire_map);
             } else {
@@ -552,6 +588,7 @@ struct TmrxPass : public Pass {
 
         mod->design->rename(mod, mod_name);
         RTLIL::Module *wrapper = mod->design->addModule(org_mod_name);
+        wrapper->set_bool_attribute(ID(tmrx_is_proper_submodule));
         dict<RTLIL::Wire*, std::vector<RTLIL::Wire*>> wire_map;
 
 
@@ -687,7 +724,7 @@ struct TmrxPass : public Pass {
     }
 
     void connect_error_signal(RTLIL::Module *mod, std::vector<RTLIL::Wire*> error_signals){
-        log_header(mod->design, "Connecting Error Signals");
+        log_header(mod->design, "Connecting Error Signals\n");
 
         RTLIL::Wire *sink = nullptr;
         for (auto w : mod->wires()) {
@@ -704,6 +741,7 @@ struct TmrxPass : public Pass {
         if (sink != nullptr && !error_signals.empty()) {
           RTLIL::IdString sink_name = sink->name;
           mod->rename(sink,mod->uniquify(sink_name.str() + "_old"));
+          sink->port_output = false;
           RTLIL::Wire *new_error = mod->addWire(sink_name, sink->width);
 
 
@@ -712,6 +750,7 @@ struct TmrxPass : public Pass {
           new_error->upto = sink->upto;
           new_error->attributes = sink->attributes;
           sink->attributes.clear();
+          mod->fixup_ports();
 
           RTLIL::SigSpec last_wire = sink;
           for (auto s : error_signals) {
