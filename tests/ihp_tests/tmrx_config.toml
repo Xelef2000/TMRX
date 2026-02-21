@@ -3,7 +3,7 @@
 # tmr_mode = "FullModuleTMR"
 tmr_mode = "LogicTMR"
 tmr_voter = "Default"
-preserv_module_ports = false
+preserv_module_ports = true
 insert_voter_before_ff = false
 insert_voter_after_ff = true
 tmr_mode_full_module_insert_voter_before_modules = true
@@ -24,7 +24,7 @@ logic_path_3_suffix = "_c"
 # tmr_mode = "FullModuleTMR"
 tmr_mode = "LogicTMR"
 tmr_voter = "Default"
-preserv_module_ports = true
+preserv_module_ports = false
 insert_voter_before_ff = false
 insert_voter_after_ff = true
 tmr_mode_full_module_insert_voter_before_modules = true
