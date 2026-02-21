@@ -23,7 +23,7 @@ insert_voter(RTLIL::Module *module, std::vector<RTLIL::SigSpec> inputs, RTLIL::D
 
 void connect_error_signal(RTLIL::Module *mod, std::vector<RTLIL::Wire *> error_signals);
 
-} // namespace TMRX
+}
 YOSYS_NAMESPACE_END
 
 #endif

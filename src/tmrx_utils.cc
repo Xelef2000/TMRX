@@ -186,5 +186,5 @@ void connect_error_signal(RTLIL::Module *mod, std::vector<RTLIL::Wire *> error_s
         mod->connect(new_error, last_wire);
     }
 }
-} // namespace TMRX
+}
 YOSYS_NAMESPACE_END

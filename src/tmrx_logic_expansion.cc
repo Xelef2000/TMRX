@@ -410,6 +410,6 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr) {
     connect_error_signal(mod, error_wires);
 }
 
-} // namespace TMRX
+}
 
 YOSYS_NAMESPACE_END

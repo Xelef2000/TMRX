@@ -151,6 +151,6 @@ void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
 
     connect_error_signal(wrapper, error_wires);
 }
-} // namespace TMRX
+}
 
 YOSYS_NAMESPACE_END
