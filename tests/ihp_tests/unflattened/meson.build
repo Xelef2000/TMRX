@@ -16,10 +16,12 @@ test(
   yosys,
   args: [
     '-ql', 'ihp_synth_unflattened.log',
+    '-m', slang_plugin_path,
     '-m', plugin_path,
     '-s', 'ihp_synth_unflattened.ys',
     '-v', '10',
   ],
   timeout: 300,
   workdir: meson.current_build_dir(),
+  depends: [slang_build, tmrx],
 )

@@ -8,6 +8,37 @@ git = find_program('git', required: true)
 pdk_dir_name = 'IHP-Open-PDK'
 pdk_abs_path = meson.project_source_root() / pdk_dir_name
 
+slang_dir_name = 'yosys-slang'
+slang_abs_path = meson.project_source_root() / slang_dir_name
+
+if not fs.is_dir(slang_abs_path)
+  message('Cloning yosys-slang...')
+  run_command(
+    git,
+    'clone',
+    '--recursive', 'https://github.com/povik/yosys-slang.git',
+    slang_abs_path,
+    check: true,
+  )
+endif
+
+make = find_program('make', required: true)
+slang_build = custom_target(
+  'build_slang_plugin',
+  output: 'slang_stamp',
+  command: [
+    make,
+    '-C', slang_abs_path,
+    '-j', run_command('nproc', check: false).stdout().strip(),
+    '&&',
+    'touch',
+    '@OUTPUT@',
+  ],
+  build_by_default: true,
+)
+
+slang_plugin_path = slang_abs_path / 'build' / 'slang.so'
+
 if not fs.is_dir(pdk_abs_path)
   message('Cloning IHP-Open-PDK...')
   run_command(
