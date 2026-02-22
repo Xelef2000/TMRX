@@ -119,11 +119,11 @@ void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
         }
     }
 
-    if (cfg->preserve_module_ports) {
+    if (cfg->preserve_module_ports || !cfg->expand_clock || !cfg->expand_reset) {
         for (auto wm : wire_map) {
             if (wm.first->port_output) {
 
-                if (is_tmr_error_out_wire(wm.first)) {
+                if (is_tmr_error_out_wire(wm.first) || (!cfg->preserve_module_ports && ((cfg->expand_clock && is_clk_wire(wm.first,cfg)) || (cfg->expand_reset && is_rst_wire(wm.first,cfg))) )) {
                     continue;
                 }
 

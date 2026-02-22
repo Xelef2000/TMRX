@@ -216,6 +216,10 @@ insert_output_voters(RTLIL::Module *mod,
                      const Config *cfg) {
     std::vector<RTLIL::Wire *> error_signals;
     for (auto outputs : out_map) {
+        if(!cfg->preserve_module_ports && ((is_clk_wire(outputs.first,cfg) && cfg->expand_clock)||((is_clk_wire(outputs.first,cfg) && cfg->expand_clock)))){
+            continue;
+        }
+
         outputs.first->port_output = false;
 
         std::vector<RTLIL::SigSpec> out_sigs = {};
@@ -248,8 +252,8 @@ void rename_wires_and_cells(RTLIL::Module *mod, std::vector<RTLIL::Wire *> wires
     log_header(mod->design, "Renaming wires with suffix %s\n", suffix.c_str());
     for (auto w : wires) {
         if (is_tmr_error_out_wire(w) || (cfg->preserve_module_ports && w->port_input) ||
-            (is_clk_wire(w, cfg) && !cfg->expand_clock) ||
-            (is_rst_wire(w, cfg) && !cfg->expand_reset)) {
+            (is_clk_wire(w, cfg) && !cfg->expand_clock  && !w->port_output) ||
+            (is_rst_wire(w, cfg) && !cfg->expand_reset && !w->port_output)) {
             continue;
         }
         mod->rename(w, mod->uniquify(w->name.str() + suffix));
@@ -278,8 +282,8 @@ insert_duplicate_logic(RTLIL::Module *mod, std::vector<RTLIL::Wire *> wires,
         log("Wire %s is clock: %i\n", w->name.c_str(), is_clk_wire(w, cfg));
         // TODO: verify if this actually works, fix no clk/rst expansion
         if ((cfg->preserve_module_ports && w->port_input) ||
-            (is_clk_wire(w, cfg) && !cfg->expand_clock) ||
-            (is_rst_wire(w, cfg) && !cfg->expand_reset)) {
+            (is_clk_wire(w, cfg) && !cfg->expand_clock && !w->port_output) ||
+            (is_rst_wire(w, cfg) && !cfg->expand_reset && !w->port_output)) {
             wire_map[w] = w;
             continue;
         }
@@ -391,7 +395,7 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr) {
 
     rename_wires_and_cells(mod, original_wires, original_cells, cfg->logic_path_1_suffix, cfg);
 
-    if (cfg->preserve_module_ports) {
+    if (cfg->preserve_module_ports || !cfg->expand_clock || cfg->expand_reset) {
         auto v_err_w = insert_output_voters(mod, combined_output_map, cfg);
         error_wires.insert(error_wires.end(), v_err_w.begin(), v_err_w.end());
     }
