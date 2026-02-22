@@ -4,6 +4,8 @@ module top (
     input  wire in0_i,
     input  wire in1_i,
     output wire out_o,
+    (* tmrx_clk_port *)
+    output wire clock_no,
     (* tmrx_error_sink *)
     output wire err_o
 );
@@ -35,6 +37,7 @@ module top (
     end
 
     assign out_o = sig_q;
+    assign clock_no = !clk_i;
 
 endmodule
 
