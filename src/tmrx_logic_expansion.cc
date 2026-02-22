@@ -395,7 +395,7 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr) {
 
     rename_wires_and_cells(mod, original_wires, original_cells, cfg->logic_path_1_suffix, cfg);
 
-    if (cfg->preserve_module_ports || !cfg->expand_clock || cfg->expand_reset) {
+    if (cfg->preserve_module_ports || !cfg->expand_clock || !cfg->expand_reset) {
         auto v_err_w = insert_output_voters(mod, combined_output_map, cfg);
         error_wires.insert(error_wires.end(), v_err_w.begin(), v_err_w.end());
     }
