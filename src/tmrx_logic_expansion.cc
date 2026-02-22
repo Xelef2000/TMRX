@@ -216,9 +216,9 @@ insert_output_voters(RTLIL::Module *mod,
                      const Config *cfg) {
     std::vector<RTLIL::Wire *> error_signals;
     for (auto outputs : out_map) {
-        if(!cfg->preserve_module_ports && ((is_clk_wire(outputs.first,cfg) && cfg->expand_clock)||((is_clk_wire(outputs.first,cfg) && cfg->expand_clock)))){
-            continue;
-        }
+        if (!cfg->preserve_module_ports && is_clk_wire(outputs.first, cfg) && cfg->expand_clock) continue;
+        if (!cfg->preserve_module_ports && is_rst_wire(outputs.first, cfg) && cfg->expand_reset) continue;
+        if (!cfg->preserve_module_ports && !is_clk_wire(outputs.first, cfg) && !is_rst_wire(outputs.first, cfg)) continue;
 
         outputs.first->port_output = false;
 

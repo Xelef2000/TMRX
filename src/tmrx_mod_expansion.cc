@@ -121,11 +121,12 @@ void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
 
     if (cfg->preserve_module_ports || !cfg->expand_clock || !cfg->expand_reset) {
         for (auto wm : wire_map) {
-            if (wm.first->port_output) {
+            if (!wm.first->port_output) continue;
+            if (is_tmr_error_out_wire(wm.first)) continue;
+            if (!cfg->preserve_module_ports && is_clk_wire(wm.first, cfg) && cfg->expand_clock) continue;
+            if (!cfg->preserve_module_ports && is_rst_wire(wm.first, cfg) && cfg->expand_reset) continue;
+            if (!cfg->preserve_module_ports && !is_clk_wire(wm.first, cfg) && !is_rst_wire(wm.first, cfg)) continue;
 
-                if (is_tmr_error_out_wire(wm.first) || (!cfg->preserve_module_ports && ((cfg->expand_clock && is_clk_wire(wm.first,cfg)) || (cfg->expand_reset && is_rst_wire(wm.first,cfg))) )) {
-                    continue;
-                }
 
                 auto [v_out, err] =
                     insert_voter(wrapper,
@@ -136,7 +137,6 @@ void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
                 cell_ports.at(0).at(wm.first) = v_out;
                 cell_ports.at(1).at(wm.first) = v_out;
                 cell_ports.at(2).at(wm.first) = v_out;
-            }
         }
     }
 
