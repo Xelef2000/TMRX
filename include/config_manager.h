@@ -5,7 +5,9 @@
 #include "kernel/yosys.h"
 #include "kernel/yosys_common.h"
 #include "toml11/toml.hpp"
+#include <optional>
 #include <string>
+#include <vector>
 
 YOSYS_NAMESPACE_BEGIN
 
@@ -13,6 +15,7 @@ YOSYS_NAMESPACE_END
 
 const std::string cfg_group_prefix = "group";
 const std::string cfg_module_prefix = "module_";
+const std::string cfg_specific_module_prefix = "specific_module_";
 
 const std::string cfg_group_assignment_attr_name = "\\tmrx_assign_to_group";
 const std::string cfg_tmr_mode_attr_name = "\\tmrx_tmr_mode";
@@ -34,16 +37,18 @@ const std::string cfg_logic_path_3_suffix_attr_name = "\\tmrx_logic_path_3_suffi
 
 const auto ATTRIBUTE_IS_PROPER_SUBMODULE = ID(tmrx_is_proper_submodule);
 
+enum class TmrMode {
+    None,
+    FullModuleTMR,
+    LogicTMR,
+};
+
+enum class TmrVoter { Default };
+
 struct Config {
-    enum class TmrMode {
-        None,
-        FullModuleTMR,
-        LogicTMR,
-    };
 
     TmrMode tmr_mode;
 
-    enum class TmrVoter { Default };
 
     TmrVoter tmr_voter;
 
@@ -55,10 +60,10 @@ struct Config {
     bool tmr_mode_full_module_insert_voter_before_modules;
     bool tmr_mode_full_module_insert_voter_after_modules;
 
-    std::string clock_port_name;
+    Yosys::pool<Yosys::RTLIL::IdString> clock_port_names;
     bool expand_clock;
 
-    std::string reset_port_name;
+    Yosys::pool<Yosys::RTLIL::IdString> reset_port_names;
     bool expand_reset;
 
     Yosys::pool<Yosys::RTLIL::IdString> ff_cells;
@@ -70,6 +75,36 @@ struct Config {
     std::string logic_path_3_suffix;
 };
 
+struct ConfigPart {
+
+
+    std::optional<TmrMode> tmr_mode;
+
+    std::optional<TmrVoter> tmr_voter;
+
+    std::optional<bool> preserve_module_ports;
+
+    std::optional<bool> insert_voter_before_ff;
+    std::optional<bool> insert_voter_after_ff;
+
+    std::optional<bool> tmr_mode_full_module_insert_voter_before_modules;
+    std::optional<bool> tmr_mode_full_module_insert_voter_after_modules;
+
+    std::optional<Yosys::pool<Yosys::RTLIL::IdString>> clock_port_names;
+    std::optional<bool> expand_clock;
+
+    std::optional<Yosys::pool<Yosys::RTLIL::IdString>> reset_port_names;
+    std::optional<bool> expand_reset;
+
+    std::optional<Yosys::pool<Yosys::RTLIL::IdString>> ff_cells;
+    std::optional<Yosys::pool<Yosys::RTLIL::IdString>> additional_ff_cells;
+    std::optional<Yosys::pool<Yosys::RTLIL::IdString>> excluded_ff_cells;
+
+    std::optional<std::string> logic_path_1_suffix;
+    std::optional<std::string> logic_path_2_suffix;
+    std::optional<std::string> logic_path_3_suffix;
+};
+
 struct ConfigManager {
   private:
     void load_global_default_cfg();
@@ -79,13 +114,22 @@ struct ConfigManager {
                                          const std::string &def);
     bool get_bool_attr_value_or(const Yosys::RTLIL::Module *mod, const std::string &attr, bool def);
     int get_int_attr_value_or(const Yosys::RTLIL::Module *mod, const std::string &attr, int def);
-    Config parse_config(const toml::value &t, const Config &default_cfg);
-    Config parse_module_annotations(const Yosys::RTLIL::Module *mod, const Config &default_cfg);
+    std::optional<std::string> get_string_attr_value(const Yosys::RTLIL::Module *mod,const std::string &attr);
+    std::optional<bool> get_bool_attr_value(const Yosys::RTLIL::Module *mod, const std::string &attr);
+    std::optional<bool> get_int_attr_value(const Yosys::RTLIL::Module *mod, const std::string &attr);
+    std::optional<std::vector<std::string>> get_string_list_attr_value(const Yosys::RTLIL::Module *mod,const std::string &attr);
+    ConfigPart parse_config(const toml::value &t);
+    ConfigPart parse_module_annotations(const Yosys::RTLIL::Module *mod);
+    Config assemble_config(std::vector<ConfigPart> parts, Config def);
+
 
     Config global_cfg;
 
-    Yosys::dict<std::string, Config> group_cfg;
-    Yosys::dict<Yosys::RTLIL::IdString, Config> module_cfgs;
+    Yosys::dict<std::string, ConfigPart> group_cfg;
+    Yosys::dict<Yosys::RTLIL::IdString, ConfigPart> module_cfgs;
+    Yosys::dict<Yosys::RTLIL::IdString, Config> final_module_cfgs;
+    Yosys::dict<Yosys::RTLIL::IdString, ConfigPart> specific_module_cfgs;
+    Yosys::dict<Yosys::RTLIL::IdString, ConfigPart> module_attr_cfgs;
 
   public:
     ConfigManager(Yosys::RTLIL::Design *design, const std::string &config_file);
