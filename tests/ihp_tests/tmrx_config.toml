@@ -61,8 +61,8 @@ logic_path_2_suffix = "_b"
 logic_path_3_suffix = "_c"
 
 [module_groups]
-mod1 = "groupA"
-mod2 = "groupB"
+mod1 = "A"
+mod2 = "B"
 
 
 [groupA]
