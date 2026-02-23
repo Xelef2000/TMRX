@@ -114,10 +114,10 @@ struct ConfigManager {
                                          const std::string &def);
     bool get_bool_attr_value_or(const Yosys::RTLIL::Module *mod, const std::string &attr, bool def);
     int get_int_attr_value_or(const Yosys::RTLIL::Module *mod, const std::string &attr, int def);
-    std::optional<std::string> get_string_attr_value(const Yosys::RTLIL::Module *mod,const std::string &attr);
+    std::optional<std::string> get_string_attr_value(const Yosys::RTLIL::Module *mod, const std::string &attr);
     std::optional<bool> get_bool_attr_value(const Yosys::RTLIL::Module *mod, const std::string &attr);
     std::optional<int> get_int_attr_value(const Yosys::RTLIL::Module *mod, const std::string &attr);
-    std::optional<std::vector<std::string>> get_string_list_attr_value(const Yosys::RTLIL::Module *mod,const std::string &attr);
+    std::optional<std::vector<std::string>> get_string_list_attr_value(const Yosys::RTLIL::Module *mod, const std::string &attr);
     ConfigPart parse_config(const toml::value &t);
     ConfigPart parse_module_annotations(const Yosys::RTLIL::Module *mod);
     Config assemble_config(std::vector<ConfigPart> parts, Config def);

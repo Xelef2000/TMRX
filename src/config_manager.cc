@@ -2,8 +2,6 @@
 #include "kernel/log.h"
 #include "kernel/rtlil.h"
 #include "kernel/yosys_common.h"
-#include <execution>
-#include <iterator>
 #include <optional>
 #include <string>
 #include <vector>
@@ -43,7 +41,7 @@ void ConfigManager::load_default_groups_cfg() {
     group_cfg["black_box_module"].tmr_mode = TmrMode::FullModuleTMR;
 
     group_cfg["cdc_module"] = ConfigPart();
-    group_cfg["cdc_module"].tmr_mode =TmrMode::FullModuleTMR;
+    group_cfg["cdc_module"].tmr_mode = TmrMode::FullModuleTMR;
 
     // TODO: add top module
 }
@@ -149,7 +147,7 @@ ConfigPart ConfigManager::parse_config(const toml::value &t) {
 
     if(t.contains("clock_port_names")){
         auto clk_ports = toml::find_or<std::vector<std::string>>(t, "clock_port_names", {});
-        if(!cfg.clock_port_names && !clk_ports.empty()){
+        if(!cfg.clock_port_names){
             cfg.clock_port_names.emplace();
         }
 
@@ -164,7 +162,7 @@ ConfigPart ConfigManager::parse_config(const toml::value &t) {
 
     if(t.contains("reset_port_names")){
         auto rst_ports = toml::find_or<std::vector<std::string>>(t, "reset_port_names", {});
-        if(!cfg.reset_port_names && !rst_ports.empty()){
+        if(!cfg.reset_port_names){
             cfg.reset_port_names.emplace();
         }
         for (auto &port : rst_ports) {
@@ -173,7 +171,7 @@ ConfigPart ConfigManager::parse_config(const toml::value &t) {
     }
 
     if(t.contains("expand_reset")){
-        cfg.expand_clock = toml::find<bool>(t, "expand_reset");
+        cfg.expand_reset = toml::find<bool>(t, "expand_reset");
     }
 
     if(t.contains("tmr_mode_full_module_insert_voter_after_modules")){
@@ -201,7 +199,7 @@ ConfigPart ConfigManager::parse_config(const toml::value &t) {
 
     if(t.contains("ff_cells")){
         auto ff_cells = toml::find_or<std::vector<std::string>>(t, "ff_cells", {});
-        if(!cfg.ff_cells && !ff_cells.empty()){
+        if(!cfg.ff_cells){
             cfg.ff_cells.emplace();
         }
 
@@ -213,7 +211,7 @@ ConfigPart ConfigManager::parse_config(const toml::value &t) {
 
     if(t.contains("additional_ff_cells")){
         auto additional_ffs = toml::find_or<std::vector<std::string>>(t, "additional_ff_cells", {});
-        if(!cfg.additional_ff_cells && ! additional_ffs.empty()){
+        if(!cfg.additional_ff_cells){
             cfg.additional_ff_cells.emplace();
         }
 
@@ -222,9 +220,9 @@ ConfigPart ConfigManager::parse_config(const toml::value &t) {
         }
     }
 
-   if(t.contains("excluded_ff_cells")){
+    if(t.contains("excluded_ff_cells")){
         auto excl_ffs = toml::find_or<std::vector<std::string>>(t, "excluded_ff_cells", {});
-        if(!cfg.excluded_ff_cells && ! excl_ffs.empty()){
+        if(!cfg.excluded_ff_cells){
             cfg.excluded_ff_cells.emplace();
         }
 
@@ -267,22 +265,22 @@ ConfigPart ConfigManager::parse_module_annotations(const Yosys::RTLIL::Module *m
         get_bool_attr_value(mod, cfg_tmr_mode_full_module_insert_voter_after_modules_attr_name);
 
     auto clk_port_strs = get_string_list_attr_value(mod, cfg_clock_port_name_attr_name);
-    if(clk_port_strs && !clk_port_strs->empty()){
+    if(clk_port_strs){
         if (!cfg.clock_port_names){
             cfg.clock_port_names.emplace();
         }
-        for(std::string port_name : *clk_port_strs){
+        for(auto &port_name : *clk_port_strs){
             cfg.clock_port_names->insert(Yosys::RTLIL::IdString("\\" + port_name));
         }
     }
 
     auto rst_port_strs = get_string_list_attr_value(mod, cfg_rst_port_name_attr_name);
-    if(rst_port_strs && !rst_port_strs->empty()){
+    if(rst_port_strs){
         if(!cfg.reset_port_names){
             cfg.reset_port_names.emplace();
         }
 
-        for(std::string port_name : *rst_port_strs){
+        for(auto &port_name : *rst_port_strs){
             cfg.reset_port_names->insert(Yosys::RTLIL::IdString("\\" + port_name));
         }
     }
@@ -300,7 +298,7 @@ ConfigPart ConfigManager::parse_module_annotations(const Yosys::RTLIL::Module *m
 
 Config ConfigManager::assemble_config(std::vector<ConfigPart> parts, Config def){
     Config cfg(def);
-    for(auto cfg_part : parts){
+    for(auto &cfg_part : parts){
         if(cfg_part.tmr_mode){
             cfg.tmr_mode = *cfg_part.tmr_mode;
         }
@@ -424,7 +422,7 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
         auto group_names = get_string_list_attr_value(module, cfg_group_assignment_attr_name);
 
         if (group_names) {
-            for(std::string name : *group_names){
+            for(const auto &name : *group_names){
                 group_assignments[mod_name].push_back(name);
             }
         }
@@ -458,7 +456,7 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
 
             if (table_name.rfind(cfg_specific_module_prefix, 0) == 0) {
                 if (table_name.find('$') == std::string::npos) {
-                    Yosys::log_error("Specific module configuration are for readslangs auto uniquified module names, use module config\n");
+                    Yosys::log_error("Specific module configurations are for readslangs auto uniquified module names, use module config\n");
                 }
 
                 specific_module_cfgs["\\" + table_name.substr(cfg_specific_module_prefix.size())] =
@@ -497,9 +495,9 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
         std::vector<ConfigPart> cfg_parts = {global_config_part};
 
         if(group_assignments.count(mod_name) != 0){
-            for(auto asig : group_assignments.at(mod_name)){
+            for(auto &asig : group_assignments.at(mod_name)){
                 if(group_cfg.count(asig) == 0){
-                    Yosys::log_warning("Waring group %s for module %s | %s not found, skipping assignment", asig.c_str(), specific_mod_name.c_str(), mod_name.c_str());
+                    Yosys::log_warning("Warning group %s for module %s | %s not found, skipping assignment", asig.c_str(), specific_mod_name.c_str(), mod_name.c_str());
                     continue;
                 }
                 cfg_parts.push_back(group_cfg.at(asig));
@@ -507,7 +505,12 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
         }
 
         if(group_assignments.count(specific_mod_name) != 0){
-            for(auto asig : group_assignments.at(specific_mod_name)){
+            for(auto &asig : group_assignments.at(specific_mod_name)){
+                if(group_cfg.count(asig) == 0){
+                    Yosys::log_warning("Warning group %s for module %s | %s not found, skipping assignment", asig.c_str(), specific_mod_name.c_str(), mod_name.c_str());
+                    continue;
+                }
+
                 cfg_parts.push_back(group_cfg.at(asig));
             }
         }
@@ -520,7 +523,7 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
             cfg_parts.push_back(module_attr_cfgs.at(specific_mod_name));
         }
 
-        if(specific_module_cfgs.count(specific_mod_name) !=0 ){
+        if(specific_module_cfgs.count(specific_mod_name) != 0 ){
             cfg_parts.push_back(specific_module_cfgs.at(specific_mod_name));
         }
 
@@ -601,7 +604,7 @@ std::string ConfigManager::cfg_as_string(Yosys::RTLIL::Module *mod) const {
     }
     ret += "]\n";
 
-    ret += "Exclded FF Cells: [";
+    ret += "Excluded FF Cells: [";
     for (auto cell : mcfg->excluded_ff_cells) {
         ret += cell.str() + ", ";
     }
