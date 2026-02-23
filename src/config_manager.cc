@@ -88,7 +88,7 @@ std::optional<bool> ConfigManager::get_bool_attr_value(const Yosys::RTLIL::Modul
     }
     return std::nullopt;
 }
-std::optional<bool> ConfigManager::get_int_attr_value(const Yosys::RTLIL::Module *mod, const std::string &attr) {
+std::optional<int> ConfigManager::get_int_attr_value(const Yosys::RTLIL::Module *mod, const std::string &attr) {
     if (mod->has_attribute(attr)) {
         return std::stoi(mod->get_string_attribute(attr));
     }
@@ -101,10 +101,10 @@ std::optional<std::vector<std::string>> ConfigManager::get_string_list_attr_valu
         std::vector<std::string> res;
         std::string attr_list = mod->get_string_attribute(attr);
         std::stringstream ss(attr_list);
-        std::string attr;
+        std::string attri;
 
-        while (std::getline(ss, attr, ';')) {
-            res.push_back(attr);
+        while (std::getline(ss, attri, ';')) {
+            res.push_back(attri);
         }
         return res;
     }
@@ -148,7 +148,12 @@ ConfigPart ConfigManager::parse_config(const toml::value &t) {
     }
 
     if(t.contains("clock_port_names")){
-        for (auto &port : toml::find_or<std::vector<std::string>>(t, "clock_port_names", {})) {
+        auto clk_ports = toml::find_or<std::vector<std::string>>(t, "clock_port_names", {});
+        if(!cfg.clock_port_names && !clk_ports.empty()){
+            cfg.clock_port_names.emplace();
+        }
+
+        for (auto &port : clk_ports) {
             cfg.clock_port_names->insert(Yosys::RTLIL::IdString("\\" + port));
         }
     }
@@ -158,13 +163,17 @@ ConfigPart ConfigManager::parse_config(const toml::value &t) {
     }
 
     if(t.contains("reset_port_names")){
-        for (auto &port : toml::find_or<std::vector<std::string>>(t, "reset_port_names", {})) {
+        auto rst_ports = toml::find_or<std::vector<std::string>>(t, "reset_port_names", {});
+        if(!cfg.reset_port_names && !rst_ports.empty()){
+            cfg.reset_port_names.emplace();
+        }
+        for (auto &port : rst_ports) {
             cfg.reset_port_names->insert(Yosys::RTLIL::IdString("\\" + port));
         }
     }
 
-    if(t.contains("expand_expand_reset")){
-        cfg.expand_clock = toml::find<bool>(t, "expand_expand_reset");
+    if(t.contains("expand_reset")){
+        cfg.expand_clock = toml::find<bool>(t, "expand_reset");
     }
 
     if(t.contains("tmr_mode_full_module_insert_voter_after_modules")){
@@ -191,20 +200,35 @@ ConfigPart ConfigManager::parse_config(const toml::value &t) {
     }
 
     if(t.contains("ff_cells")){
-        for (auto &cell : toml::find_or<std::vector<std::string>>(t, "ff_cells", {})) {
+        auto ff_cells = toml::find_or<std::vector<std::string>>(t, "ff_cells", {});
+        if(!cfg.ff_cells && !ff_cells.empty()){
+            cfg.ff_cells.emplace();
+        }
+
+        for (auto &cell : ff_cells) {
             cfg.ff_cells->insert("\\" + (cell));
         }
     }
 
 
     if(t.contains("additional_ff_cells")){
-        for (auto &cell : toml::find_or<std::vector<std::string>>(t, "additional_ff_cells", {})) {
+        auto additional_ffs = toml::find_or<std::vector<std::string>>(t, "additional_ff_cells", {});
+        if(!cfg.additional_ff_cells && ! additional_ffs.empty()){
+            cfg.additional_ff_cells.emplace();
+        }
+
+        for (auto &cell : additional_ffs) {
             cfg.additional_ff_cells->insert("\\" + (cell));
         }
     }
 
    if(t.contains("excluded_ff_cells")){
-        for (auto &cell : toml::find_or<std::vector<std::string>>(t, "excluded_ff_cells", {})) {
+        auto excl_ffs = toml::find_or<std::vector<std::string>>(t, "excluded_ff_cells", {});
+        if(!cfg.excluded_ff_cells && ! excl_ffs.empty()){
+            cfg.excluded_ff_cells.emplace();
+        }
+
+        for (auto &cell : excl_ffs) {
             cfg.excluded_ff_cells->insert("\\" + (cell));
         }
     }
@@ -243,14 +267,21 @@ ConfigPart ConfigManager::parse_module_annotations(const Yosys::RTLIL::Module *m
         get_bool_attr_value(mod, cfg_tmr_mode_full_module_insert_voter_after_modules_attr_name);
 
     auto clk_port_strs = get_string_list_attr_value(mod, cfg_clock_port_name_attr_name);
-    if(clk_port_strs){
+    if(clk_port_strs && !clk_port_strs->empty()){
+        if (!cfg.clock_port_names){
+            cfg.clock_port_names.emplace();
+        }
         for(std::string port_name : *clk_port_strs){
             cfg.clock_port_names->insert(Yosys::RTLIL::IdString("\\" + port_name));
         }
     }
 
     auto rst_port_strs = get_string_list_attr_value(mod, cfg_rst_port_name_attr_name);
-    if(rst_port_strs){
+    if(rst_port_strs && !rst_port_strs->empty()){
+        if(!cfg.reset_port_names){
+            cfg.reset_port_names.emplace();
+        }
+
         for(std::string port_name : *rst_port_strs){
             cfg.reset_port_names->insert(Yosys::RTLIL::IdString("\\" + port_name));
         }
@@ -461,12 +492,16 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
         Yosys::RTLIL::IdString specific_mod_name = module->name;
         Yosys::RTLIL::IdString mod_name = specific_mod_name.str().substr(0, specific_mod_name.str().find('$'));
 
-        Yosys::log("Assembling for %s| %s\n", specific_mod_name, mod_name);
+        Yosys::log("Assembling for %s| %s\n", specific_mod_name.c_str(), mod_name.c_str());
 
         std::vector<ConfigPart> cfg_parts = {global_config_part};
 
         if(group_assignments.count(mod_name) != 0){
             for(auto asig : group_assignments.at(mod_name)){
+                if(group_cfg.count(asig) == 0){
+                    Yosys::log_warning("Waring group %s for module %s | %s not found, skipping assignment", asig.c_str(), specific_mod_name.c_str(), mod_name.c_str());
+                    continue;
+                }
                 cfg_parts.push_back(group_cfg.at(asig));
             }
         }
