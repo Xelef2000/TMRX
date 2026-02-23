@@ -40,19 +40,19 @@ bool is_flip_flop(const RTLIL::Cell *cell, const RTLIL::Module *module, const Co
 // Move ids to header
 //  TODO: check attr if it is a submodule port
 bool is_clk_wire(const RTLIL::Wire *w, const Config *cfg) {
-    return ((w->name == cfg->clock_port_name) || w->has_attribute(ID(tmrx_clk_port)));
+    return ((cfg->clock_port_names.count(w->name) != 0) || w->has_attribute(ID(tmrx_clk_port)));
 }
 
 bool is_clk_wire(RTLIL::IdString port, const Config *cfg) {
-    return ((port == cfg->clock_port_name));
+    return (cfg->clock_port_names.count(port) != 0);
 }
 
 bool is_rst_wire(RTLIL::IdString port, const Config *cfg) {
-    return ((port == cfg->reset_port_name));
+    return (cfg->reset_port_names.count(port) != 0);
 }
 
 bool is_rst_wire(const RTLIL::Wire *w, const Config *cfg) {
-    return ((w->name == cfg->reset_port_name) || w->has_attribute(ID(tmrx_rst_port)));
+    return ((cfg->reset_port_names.count(w->name) != 0) || w->has_attribute(ID(tmrx_rst_port)));
 }
 
 bool is_tmr_error_out_wire(RTLIL::Wire *w) { return (w->has_attribute(ID(tmrx_error_sink))); }

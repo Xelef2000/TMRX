@@ -78,15 +78,15 @@ struct TmrxPass : public Pass {
             log_pop();
             log_push();
 
-            if (cfg_mgr.cfg(worker)->tmr_mode == Config::TmrMode::None) {
+            if (cfg_mgr.cfg(worker)->tmr_mode == TmrMode::None) {
                 continue;
             }
 
-            if (cfg_mgr.cfg(worker)->tmr_mode == Config::TmrMode::LogicTMR) {
+            if (cfg_mgr.cfg(worker)->tmr_mode == TmrMode::LogicTMR) {
                 TMRX::logic_tmr_expansion(worker, &cfg_mgr);
             }
 
-            if (cfg_mgr.cfg(worker)->tmr_mode == Config::TmrMode::FullModuleTMR) {
+            if (cfg_mgr.cfg(worker)->tmr_mode == TmrMode::FullModuleTMR) {
                 TMRX::full_module_tmr_expansion(worker, cfg_mgr.cfg(worker));
             }
 
