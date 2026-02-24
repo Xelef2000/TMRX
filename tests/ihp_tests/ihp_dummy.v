@@ -18,12 +18,10 @@ module top (
 
     assign sig_d = res_y ^ in1_i;
 
-    wire clk_n;
-    assign clk_n = !clk_i;
 
 
     submodule u_sub (
-        .clk_i(clk_n),
+        .clk_i(clk_i),
         .rst_ni(rst_ni),
         .a_i(in0_i),
         .b_i(sig_q),
