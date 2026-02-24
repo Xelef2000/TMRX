@@ -1,8 +1,11 @@
 #include "tmrx_utils.h"
+#include "config_manager.h"
 #include "kernel/rtlil.h"
+#include "kernel/sigtools.h"
 #include "kernel/yosys.h"
 #include "kernel/yosys_common.h"
 #include "tmrx.h"
+#include <cstddef>
 YOSYS_NAMESPACE_BEGIN
 
 namespace TMRX {
@@ -131,15 +134,26 @@ RTLIL::IdString createVoterCell(RTLIL::Design *design, size_t wire_width) {
 
 // TODO: remove mod and design
 std::pair<RTLIL::Wire *, RTLIL::Wire *>
-insert_voter(RTLIL::Module *module,const std::vector<RTLIL::SigSpec> &inputs, RTLIL::Design *design) {
+insert_voter(RTLIL::Module *module,const std::vector<RTLIL::SigSpec> &inputs, const Config *cfg) {
     if (inputs.size() != 3) {
         log_error("Voters are only intended to be inserted with 3 inputs");
     }
 
+    RTLIL::Design *design = module->design;
+
     size_t wire_width = inputs.at(0).size();
 
+    // if(cfg->tmr_voter_safe_mode){
+
+    //     Yosys::SigMap sigmap(module);
+
+    //     for(size_t i = 0; i<3;i++){
+    //         SigSpec sig = sigmap(original_sig);
+    //     }
 
 
+
+    // }
 
 
     RTLIL::IdString voter_name = createVoterCell(design, wire_width);

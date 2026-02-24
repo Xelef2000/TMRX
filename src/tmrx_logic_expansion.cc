@@ -1,4 +1,5 @@
 #include "tmrx_logic_expansion.h"
+#include "config_manager.h"
 #include "kernel/rtlil.h"
 #include "tmrx_utils.h"
 #include "utils.h"
@@ -101,7 +102,7 @@ std::vector<RTLIL::Wire *> connect_submodules_mod_ports(
                                       mod_cfg->expand_clock) ||
                                      (is_rst_wire(port_wire, cell_cfg) && !cell_cfg->expand_reset &&
                                       mod_cfg->expand_reset))) {
-            auto [res_v, error_v] = insert_voter(mod, {sig, sig_b, sig_c}, mod->design);
+            auto [res_v, error_v] = insert_voter(mod, {sig, sig_b, sig_c}, mod_cfg);
             error_signals.push_back(error_v);
 
             port_a = RTLIL::IdString(port.str());
@@ -123,7 +124,7 @@ std::vector<RTLIL::Wire *> connect_submodules_mod_ports(
 
 std::vector<RTLIL::Wire *> connect_submodules_preserver_mod_ports(
     RTLIL::Module *mod, RTLIL::Cell *cell,
-    dict<RTLIL::SigSpec, std::pair<RTLIL::SigSpec, RTLIL::SigSpec>> wire_map) {
+    dict<RTLIL::SigSpec, std::pair<RTLIL::SigSpec, RTLIL::SigSpec>> wire_map, const Config *cfg) {
     log_header(mod->design, "Connect sub pre por\n");
     std::vector<RTLIL::Wire *> error_signals;
     RTLIL::Design *design = mod->design;
@@ -175,7 +176,7 @@ std::vector<RTLIL::Wire *> connect_submodules_preserver_mod_ports(
             continue;
         }
 
-        std::pair<RTLIL::Wire *, RTLIL::Wire *> res = insert_voter(mod, inputs, design);
+        std::pair<RTLIL::Wire *, RTLIL::Wire *> res = insert_voter(mod, inputs, cfg);
         error_signals.push_back(res.second);
         cell->setPort(port, res.first);
     }
@@ -197,7 +198,7 @@ std::vector<RTLIL::Wire *> connect_submodules_preserver_mod_ports(
 }
 
 std::vector<RTLIL::Wire *> insert_voter_after_ff(RTLIL::Module *mod,
-                                                 dict<Cell *, std::pair<Cell *, Cell *>> ff_map) {
+                                                 dict<Cell *, std::pair<Cell *, Cell *>> ff_map, const Config *cfg) {
     std::vector<RTLIL::Wire *> error_signals;
 
     for (auto flip_flops : ff_map) {
@@ -224,7 +225,7 @@ std::vector<RTLIL::Wire *> insert_voter_after_ff(RTLIL::Module *mod,
 
             for (size_t i = 0; i < 3; i++) {
                 std::pair<RTLIL::Wire *, RTLIL::Wire *> res_wires =
-                    insert_voter(mod, intermediate_wires, mod->design);
+                    insert_voter(mod, intermediate_wires, cfg);
                 mod->connect(res_wires.first, original_signals.at(i));
 
                 error_signals.push_back(res_wires.second);
@@ -259,7 +260,7 @@ insert_output_voters(RTLIL::Module *mod,
         out_sigs.push_back(outputs.second.second);
 
         std::pair<RTLIL::Wire *, RTLIL::Wire *> res_wires =
-            insert_voter(mod, out_sigs, mod->design);
+            insert_voter(mod, out_sigs, cfg);
         error_signals.push_back(res_wires.second);
 
         res_wires.first->port_output = true;
@@ -411,7 +412,7 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr) {
 
         log_header(mod->design, "Connecting submodules\n");
         if (cell_cfg->preserve_module_ports) {
-            v_err_w = connect_submodules_preserver_mod_ports(mod, cell, combined_wire_map);
+            v_err_w = connect_submodules_preserver_mod_ports(mod, cell, combined_wire_map, cfg);
         } else {
             v_err_w = connect_submodules_mod_ports(mod, cell, cell_cfg, cfg, combined_wire_map);
         }
@@ -432,7 +433,7 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr) {
     }
 
     if (cfg->insert_voter_after_ff) {
-        auto v_err_w = insert_voter_after_ff(mod, combined_ff_map);
+        auto v_err_w = insert_voter_after_ff(mod, combined_ff_map, cfg);
         error_wires.insert(error_wires.end(), v_err_w.begin(), v_err_w.end());
     }
 
