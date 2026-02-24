@@ -62,6 +62,12 @@ configure_file(
   configuration: croc_conf,
 )
 
+configure_file(
+  input: 'tmrx_config.toml',
+  output: 'tmrx_config.toml',
+  copy: true,
+)
+
 replace_script = custom_target(
   'replace_croc_yosys_script',
   output: 'replace_script.stamp',
