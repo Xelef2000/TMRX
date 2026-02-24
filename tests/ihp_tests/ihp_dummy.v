@@ -18,13 +18,17 @@ module top (
 
     assign sig_d = res_y ^ in1_i;
 
+    wire clk_n;
+    assign clk_n = !clk_i;
+
 
     submodule u_sub (
-        .clk_i(clk_i),
+        .clk_i(clk_n),
         .rst_ni(rst_ni),
         .a_i(in0_i),
         .b_i(sig_q),
         .y_o(res_y),
+        .clock_no(clock_no),
         .err_o()
     );
 
@@ -37,7 +41,7 @@ module top (
     end
 
     assign out_o = sig_q;
-    assign clock_no = !clk_i;
+    // assign clock_no = !clk_i;
 
 endmodule
 
@@ -49,6 +53,8 @@ module submodule (
     input  wire a_i,
     input  wire b_i,
     output wire y_o,
+    (* tmrx_clk_port *)
+    output wire clock_no,
     (* tmrx_error_sink *)
     output wire err_o
 );
@@ -65,5 +71,6 @@ module submodule (
     end
 
     assign y_o = q | a_i;
+    assign clock_no = ! clk_i;
 
 endmodule

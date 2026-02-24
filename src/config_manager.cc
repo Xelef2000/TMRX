@@ -114,6 +114,7 @@ void ConfigManager::load_global_default_cfg() {
 
     global_cfg.tmr_mode = TmrMode::LogicTMR;
     global_cfg.tmr_voter = TmrVoter::Default;
+    global_cfg.tmr_voter_safe_mode = true;
 
     global_cfg.preserve_module_ports = false;
 
@@ -122,6 +123,7 @@ void ConfigManager::load_global_default_cfg() {
 
     global_cfg.tmr_mode_full_module_insert_voter_before_modules = false;
     global_cfg.tmr_mode_full_module_insert_voter_after_modules = true;
+    global_cfg.tmr_mode_full_module_insert_voter_on_clock_nets = false;
 
     global_cfg.clock_port_names = {Yosys::RTLIL::IdString("\\clk_i")};
     global_cfg.reset_port_names = {Yosys::RTLIL::IdString("\\rst_ni")};
@@ -220,6 +222,7 @@ ConfigPart ConfigManager::parse_config(const toml::value &t) {
     cfg.tmr_voter = parse_tmr_voter(toml::find_or<std::string>(t, "tmr_voter", ""));
 
     // Parse boolean fields
+    cfg.tmr_voter_safe_mode = toml_find_optional<bool>(t, "tmr_voter_safe_mode");
     cfg.preserve_module_ports = toml_find_optional<bool>(t, "preserve_module_ports");
     cfg.insert_voter_before_ff = toml_find_optional<bool>(t, "insert_voter_before_ff");
     cfg.insert_voter_after_ff = toml_find_optional<bool>(t, "insert_voter_after_ff");
@@ -227,6 +230,8 @@ ConfigPart ConfigManager::parse_config(const toml::value &t) {
         toml_find_optional<bool>(t, "tmr_mode_full_module_insert_voter_before_modules");
     cfg.tmr_mode_full_module_insert_voter_after_modules =
         toml_find_optional<bool>(t, "tmr_mode_full_module_insert_voter_after_modules");
+    cfg.tmr_mode_full_module_insert_voter_on_clock_nets =
+        toml_find_optional<bool>(t, "tmr_mode_full_module_insert_voter_on_clock_nets");
     cfg.expand_clock = toml_find_optional<bool>(t, "expand_clock");
     cfg.expand_reset = toml_find_optional<bool>(t, "expand_reset");
 
@@ -265,6 +270,7 @@ ConfigPart ConfigManager::parse_module_annotations(const Yosys::RTLIL::Module *m
     cfg.tmr_voter = parse_tmr_voter(get_string_attr_value_or(mod, cfg_tmr_voter_attr_name, ""));
 
     // Parse boolean fields
+    cfg.tmr_voter_safe_mode = get_bool_attr_value(mod, cfg_tmr_voter_safe_mode_attr_name);
     cfg.preserve_module_ports = get_bool_attr_value(mod, cfg_tmr_preserve_module_ports_attr_name);
     cfg.insert_voter_before_ff = get_bool_attr_value(mod, cfg_insert_voter_before_ff_attr_name);
     cfg.insert_voter_after_ff = get_bool_attr_value(mod, cfg_insert_voter_after_ff_attr_name);
@@ -272,6 +278,8 @@ ConfigPart ConfigManager::parse_module_annotations(const Yosys::RTLIL::Module *m
         get_bool_attr_value(mod, cfg_tmr_mode_full_module_insert_voter_before_modules_attr_name);
     cfg.tmr_mode_full_module_insert_voter_after_modules =
         get_bool_attr_value(mod, cfg_tmr_mode_full_module_insert_voter_after_modules_attr_name);
+    cfg.tmr_mode_full_module_insert_voter_on_clock_nets =
+        get_bool_attr_value(mod, cfg_tmr_mode_full_module_insert_voter_on_clock_nets_attr_name);
     cfg.expand_clock = get_bool_attr_value(mod, cfg_expand_clock_attr_name);
     cfg.expand_reset = get_bool_attr_value(mod, cfg_expand_rst_attr_name);
 
@@ -292,6 +300,7 @@ Config ConfigManager::assemble_config(std::vector<ConfigPart> parts, Config def)
     for (const auto &part : parts) {
         apply_if_present(cfg.tmr_mode, part.tmr_mode);
         apply_if_present(cfg.tmr_voter, part.tmr_voter);
+        apply_if_present(cfg.tmr_voter_safe_mode, part.tmr_voter_safe_mode);
         apply_if_present(cfg.preserve_module_ports, part.preserve_module_ports);
         apply_if_present(cfg.insert_voter_before_ff, part.insert_voter_before_ff);
         apply_if_present(cfg.insert_voter_after_ff, part.insert_voter_after_ff);
@@ -299,6 +308,8 @@ Config ConfigManager::assemble_config(std::vector<ConfigPart> parts, Config def)
                          part.tmr_mode_full_module_insert_voter_before_modules);
         apply_if_present(cfg.tmr_mode_full_module_insert_voter_after_modules,
                          part.tmr_mode_full_module_insert_voter_after_modules);
+        apply_if_present(cfg.tmr_mode_full_module_insert_voter_on_clock_nets,
+                         part.tmr_mode_full_module_insert_voter_on_clock_nets);
         apply_if_present(cfg.clock_port_names, part.clock_port_names);
         apply_if_present(cfg.expand_clock, part.expand_clock);
         apply_if_present(cfg.reset_port_names, part.reset_port_names);
@@ -400,9 +411,7 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
 
     Yosys::log_header(design, "Parsing module attrs cfg");
     for (auto module : design->modules()) {
-        if (!(module->has_attribute(ATTRIBUTE_IS_PROPER_SUBMODULE))) {
-            continue;
-        }
+
         Yosys::RTLIL::IdString mod_name = module->name;
 
 
@@ -511,6 +520,7 @@ std::string ConfigManager::cfg_as_string(Yosys::RTLIL::Module *mod) const {
 
     ret += "TMR-Mode: " + tmr_mode_to_string(c->tmr_mode) + "\n";
     ret += "TMR-Voter: " + tmr_voter_to_string(c->tmr_voter) + "\n";
+    ret += "TMR-Voter Safe Mode: " + bool_to_string(c->tmr_voter_safe_mode) + "\n";
     ret += "Preserve Mod Ports: " + bool_to_string(c->preserve_module_ports) + "\n";
     ret += "Insert Voter before ff: " + bool_to_string(c->insert_voter_before_ff) + "\n";
     ret += "Insert Voter after ff: " + bool_to_string(c->insert_voter_after_ff) + "\n";
@@ -518,6 +528,8 @@ std::string ConfigManager::cfg_as_string(Yosys::RTLIL::Module *mod) const {
            bool_to_string(c->tmr_mode_full_module_insert_voter_before_modules) + "\n";
     ret += "Tmr Mode full; insert voter after module: " +
            bool_to_string(c->tmr_mode_full_module_insert_voter_after_modules) + "\n";
+    ret += "Tmr Mode full; insert voter on clock nets: " +
+           bool_to_string(c->tmr_mode_full_module_insert_voter_on_clock_nets) + "\n";
     ret += "Clock port names: " + pool_to_string(c->clock_port_names) + "\n";
     ret += "Expand Clock net: " + bool_to_string(c->expand_clock) + "\n";
     ret += "Reset port names: " + pool_to_string(c->reset_port_names) + "\n";

@@ -1,6 +1,7 @@
 #include "tmrx_utils.h"
 #include "kernel/rtlil.h"
 #include "kernel/yosys.h"
+#include "kernel/yosys_common.h"
 #include "tmrx.h"
 YOSYS_NAMESPACE_BEGIN
 
@@ -130,12 +131,16 @@ RTLIL::IdString createVoterCell(RTLIL::Design *design, size_t wire_width) {
 
 // TODO: remove mod and design
 std::pair<RTLIL::Wire *, RTLIL::Wire *>
-insert_voter(RTLIL::Module *module, std::vector<RTLIL::SigSpec> inputs, RTLIL::Design *design) {
+insert_voter(RTLIL::Module *module,const std::vector<RTLIL::SigSpec> &inputs, RTLIL::Design *design) {
     if (inputs.size() != 3) {
         log_error("Voters are only intended to be inserted with 3 inputs");
     }
 
     size_t wire_width = inputs.at(0).size();
+
+
+
+
 
     RTLIL::IdString voter_name = createVoterCell(design, wire_width);
 
@@ -152,7 +157,7 @@ insert_voter(RTLIL::Module *module, std::vector<RTLIL::SigSpec> inputs, RTLIL::D
     return {last_wire, err_wire};
 }
 
-void connect_error_signal(RTLIL::Module *mod, std::vector<RTLIL::Wire *> error_signals) {
+void connect_error_signal(RTLIL::Module *mod,const std::vector<RTLIL::Wire *> &error_signals) {
     log_header(mod->design, "Connecting Error Signals\n");
 
     RTLIL::Wire *sink = nullptr;

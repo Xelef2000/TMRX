@@ -6,6 +6,31 @@
 YOSYS_NAMESPACE_BEGIN
 namespace TMRX {
 namespace {
+
+
+    Yosys::pool<RTLIL::SigSpec> clk_net_wires;
+    Yosys::pool<Yosys::dict<RTLIL::Cell*, std::vector<RTLIL::IdString>>> clk_net_cells;
+
+    void build_clk_net(RTLIL::Module *mod, const Config *cfg){
+    // backwards pass
+
+    // for (auto port : mod->ports) {
+    //     RTLIL::Wire *w = mod->wire(port);
+
+    //     if(w == nullptr){
+    //         continue;
+    //     }
+
+    //     if(!is_clk_wire(w,cfg) && !){
+
+    //     }
+
+    // }
+
+
+    }
+
+
 std::vector<RTLIL::Wire *> connect_submodules_mod_ports(
     RTLIL::Module *mod, RTLIL::Cell *cell, const Config *cell_cfg, const Config *mod_cfg,
     dict<RTLIL::SigSpec, std::pair<RTLIL::SigSpec, RTLIL::SigSpec>> wire_map) {
