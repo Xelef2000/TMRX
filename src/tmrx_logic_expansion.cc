@@ -12,8 +12,9 @@ namespace {
     Yosys::pool<RTLIL::SigSpec> clk_net_wires;
     Yosys::pool<Yosys::dict<RTLIL::Cell*, std::vector<RTLIL::IdString>>> clk_net_cells;
 
-    void build_clk_net(RTLIL::Module *mod, const Config *cfg){
-    // backwards pass
+    void build_clk_net(RTLIL::Module *mod, const ConfigManager cfg_mgr){
+        const Config *cfg = cfg_mgr.cfg(mod);
+        // backwards pass
 
     // for (auto port : mod->ports) {
     //     RTLIL::Wire *w = mod->wire(port);
