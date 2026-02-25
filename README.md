@@ -1,133 +1,215 @@
 # TMRX: Triple Modular Redundancy Expansion for Yosys
 
-**TMRX** is a Yosys plugin designed to automatically inject Triple Modular Redundancy (TMR) into digital logic designs. It supports fine-grained configuration, allowing you to mix different TMR strategies (Logic TMR vs. Full Module TMR) across different parts of your design hierarchy.
+**TMRX** is a plugin for Yosys that automatically injects **Triple Modular Redundancy (TMR)** into digital designs.
 
-## Features
+It enables **fine-grained fault-tolerance control** across your hierarchy, allowing you to mix *Logic TMR* and *Full Module TMR* strategies within the same design.
 
-* 
-**Logic TMR:** Triplicates the internal logic, wires, and flip-flops of a module while maintaining the original interface (optional).
+TMRX is intended for safety-critical, radiation-tolerant, and high-reliability FPGA/ASIC flows where selective redundancy is required.
 
+---
 
-* **Full Module TMR:** Triplicates the module instantiation itself, running three distinct copies of the module working in parallel.
-* 
-**Flexible Configuration:** Configure TMR strategies globally, per module group, per module type, or per specific unique instance.
+# Overview
 
+TMRX transforms an existing RTL/netlist by:
 
-* 
-**Voter Insertion:** Automatically inserts majority voters after flip-flops or module boundaries to correct faults.
+* Triplicating logic or module instances
+* Inserting majority voters
+* Optionally replicating clock/reset trees
+* Preserving or expanding module interfaces
+* Allowing per-instance configuration
 
+It integrates directly into a standard Yosys synthesis flow.
 
-* 
-**Clock/Reset Handling:** Options to triplicate clock/reset trees or share them across redundant logic.
+---
 
+# Features
 
+## Logic TMR
 
-## Dependencies & Requirements
+* Triplicates **internal combinational logic, wires, and flip-flops**
+* Keeps the original module interface (optional)
+* Suitable for flattened or lower-level designs
 
-To build and use this plugin, you need the following:
+## Full Module TMR
 
-* **Yosys:** (with `yosys-config` in your PATH).
-* **Meson:** The build system used by this project.
-* 
-**C++ Compiler:** (supporting C++17 or later).
+* Instantiates **three independent copies** of a module
+* Optional output voter insertion
+* Clean hierarchical redundancy
 
+## Fine-Grained Configuration
 
-* **Git:** Required to fetch submodules.
-* 
-**Make:** Required for building sub-dependencies.
+Configure TMR at multiple levels:
 
+* Global default
+* Module group
+* Module type
+* Specific uniquified instance
+* Inline Verilog attributes
 
+## Automatic Voter Insertion
 
-### Docker Container
+* Insert voters after flip-flops
+* Insert voters before flip-flops (Logic TMR)
+* Insert voters at module outputs (Full Module TMR)
 
-For a pre-configured environment containing all necessary dependencies, you can use the **VLSI Toolbox** container:
+## Clock & Reset Handling
+
+* Share or replicate clock networks
+* Share or replicate reset networks
+* Explicit clock/reset port specification
+
+---
+
+# Requirements
+
+To build and use TMRX:
+
+* **Yosys** (with `yosys-config` in your `PATH`)
+* **Meson** (build system)
+* **C++17-compatible compiler**
+* **Git** (for submodules)
+* **Make** (for sub-dependencies)
+
+---
+
+## Prebuilt Environment (Docker)
+
+A ready-to-use container is available:
 
 * Image: `ghcr.io/xelef2000/vlsi-toolbox`
-* Repo: [https://github.com/Xelef2000/vlsi-toolbox](https://github.com/Xelef2000/vlsi-toolbox)
+* Repository: [https://github.com/Xelef2000/vlsi-toolbox](https://github.com/Xelef2000/vlsi-toolbox)
 
-## Building the Plugin
+---
 
-The project uses the Meson build system. It will automatically fetch and build dependencies like `yosys-slang` if they are not present.
+# Building
+
+TMRX uses Meson.
 
 ```bash
-# Setup the build directory
+# Configure build directory
 meson setup build
 
-# Compile the plugin
+# Build plugin
 meson compile -C build
-
 ```
 
-This will produce `tmrx.so` in the build directory.
+The shared library `tmrx.so` will be generated in `build/`.
 
-## Usage
+---
 
-### 1. Integration in Yosys Script
+# Usage
 
-The TMRX flow typically involves two steps: marking the design (optional but recommended for identifying specific cells) and executing the expansion.
+TMRX is typically used in two stages:
 
-A typical synthesis script (`.ys`) looks like this:
+1. **Mark important cells (optional but recommended)**
+2. **Execute TMR expansion**
+
+---
+
+## Example Yosys Script
 
 ```yosys
-# ... read design files ...
+read_slang --top top ihp_dummy.v \
+        --compat-mode --keep-hierarchy \
+        --allow-use-before-declare --ignore-unknown-modules
 
-# 1. Flatten the design (often required for Logic TMR context)
-flatten
+hierarchy -check -top top
 
-# 2. Mark Flip-Flops
-# This pass scans modules and marks FF cells before they are heavily optimized
+proc; opt; write_verilog -noattr 02_opt.v
+
+techmap
+write_verilog -noattr 03_techmap.v
+
+
 tmrx_mark
 
-# ... standard synthesis/mapping (techmap, abc, dfflibmap) ...
+read_liberty -lib /run/host/home/felix/Documents/Projects/TMRX/IHP-Open-PDK/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
 
-# 3. Execute TMR Expansion
-# Load the plugin (if not autoloaded) and run the pass with a config file
-plugin -i tmrx.so
+
+dfflibmap -liberty /run/host/home/felix/Documents/Projects/TMRX/IHP-Open-PDK/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+write_verilog -noattr 05_dff.v
+
+abc -liberty /run/host/home/felix/Documents/Projects/TMRX/IHP-Open-PDK/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+write_verilog -noattr 06_gates.v
+
 tmrx -c tmrx_config.toml
-
-# ... final optimization and cleanup ...
+write_verilog -noattr 07_tmrx.v
 opt -noff
+techmap
+dfflibmap -liberty /run/host/home/felix/Documents/Projects/TMRX/IHP-Open-PDK/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+abc -liberty /run/host/home/felix/Documents/Projects/TMRX/IHP-Open-PDK/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib -D 1000
+
+
+opt_clean -purge
+
 clean
-write_verilog final_tmr.v
+write_verilog -noattr 08_final.v
+write_json 08_final.json
+show -format svg -prefix final_netlist top
+show -format dot -prefix final_netlist top
+
+
+stat -liberty /run/host/home/felix/Documents/Projects/TMRX/IHP-Open-PDK/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
 
 ```
 
-### 2. The `tmrx_mark` Pass
+---
 
-The `tmrx_mark` pass scans selected modules for flip-flops and submodules. It is useful to run this early in the flow to identify cells that should be protected before synthesis transformations potentially obscure them.
+# The `tmrx_mark` Pass
 
-## Configuration
+`tmrx_mark` scans selected modules and marks:
 
-Configuration is handled via a TOML file passed with the `-c` flag. The configuration system uses a hierarchy of precedence:
+* Flip-flops
+* Submodule boundaries
 
-1. **Specific Module Config** (Highest priority)
-2. **Verilog Attributes** (Inline in HDL)
-3. **Module Config**
-4. **Group Config**
-5. **Global Config** (Lowest priority)
+It should be run **after heavy optimization**, but before abc and dfflibmap.
 
-### Configuration Options
+---
 
-The following options can be set in the TOML file:
+# Configuration
 
-| Option | Type | Description |
-| --- | --- | --- |
-| `tmr_mode` | String | `None`, `LogicTMR` (triplicate internals), or `FullModuleTMR` (triplicate instantiation). |
-| `tmr_voter` | String | `Default` (currently the only voter type). |
-| `preserve_module_ports` | Bool | If `true`, the module interface remains unchanged (voters inside). If `false`, ports are triplicated. |
-| `insert_voter_after_ff` | Bool | Insert a majority voter on the output of every triplicated Flip-Flop. |
-| `insert_voter_before_ff` | Bool | Insert a voter before the Flip-Flop input (Logic TMR). |
-| `clock_port_names` | List | Names of clock ports (e.g., `["clk_i"]`). |
-| `reset_port_names` | List | Names of reset ports (e.g., `["rst_ni"]`). |
-| `expand_clock` | Bool | If `true`, triplicates the clock network. If `false`, shares one clock. |
-| `expand_reset` | Bool | If `true`, triplicates the reset network. |
-| `logic_path_suffix` | String | Suffixes for redundant paths (e.g., `_a`, `_b`, `_c`). |
-| `tmr_mode_full_module_insert_voter_after_modules` | Bool | In `FullModuleTMR`, insert voters on the outputs of the triplicated modules. |
+Configuration is provided via a **TOML file** passed using:
 
-### TOML Configuration Example (`tmrx_config.toml`)
+```bash
+tmrx -c tmrx_config.toml
+```
+
+## Precedence (Highest → Lowest)
+
+1. Specific module instance
+2. Verilog attributes
+3. Module config
+4. Group config
+5. Global config
+
+This allows precise control over redundancy behavior.
+
+---
+
+# Configuration Options
+
+| Option                                            | Type   | Description                               |
+| ------------------------------------------------- | ------ | ----------------------------------------- |
+| `tmr_mode`                                        | String | `None`, `LogicTMR`, `FullModuleTMR`       |
+| `tmr_voter`                                       | String | `Default` (currently only supported type) |
+| `preserve_module_ports`                           | Bool   | Keep original interface (internal voters) |
+| `insert_voter_after_ff`                           | Bool   | Insert voter after each FF output         |
+| `insert_voter_before_ff`                          | Bool   | Insert voter before FF input              |
+| `clock_port_names`                                | List   | Clock port names (`["clk_i"]`)            |
+| `reset_port_names`                                | List   | Reset port names (`["rst_ni"]`)           |
+| `expand_clock`                                    | Bool   | Triplicate clock network                  |
+| `expand_reset`                                    | Bool   | Triplicate reset network                  |
+| `logic_path_1_suffix`                             | String | Suffix for redundant path A               |
+| `logic_path_2_suffix`                             | String | Suffix for redundant path B               |
+| `logic_path_3_suffix`                             | String | Suffix for redundant path C               |
+| `tmr_mode_full_module_insert_voter_after_modules` | Bool   | Insert voters at outputs in FullModuleTMR |
+
+---
+
+# Example Configuration
 
 ```toml
-# Default settings for the entire design
+# Global defaults
 [global]
 tmr_mode = "LogicTMR"
 tmr_voter = "Default"
@@ -144,7 +226,7 @@ logic_path_3_suffix = "_c"
 uart_rx = "safety_critical"
 debug_mod = "ignore"
 
-# Configuration for specific groups
+# Group configuration
 [groupsafety_critical]
 tmr_mode = "FullModuleTMR"
 tmr_mode_full_module_insert_voter_after_modules = true
@@ -152,43 +234,63 @@ tmr_mode_full_module_insert_voter_after_modules = true
 [groupignore]
 tmr_mode = "None"
 
-# Configuration for a specific Verilog module type
+# Per-module configuration
 [module_alu]
 tmr_mode = "LogicTMR"
 expand_reset = true
 
-# Configuration for a SPECIFIC INSTANCE (Uniquified)
-# See note below regarding Slang uniquification
+# Specific uniquified instance
 ["specific_module_cpu$root.u_alu"]
 tmr_mode = "FullModuleTMR"
 preserve_module_ports = true
-
 ```
 
-### Note on "Specific Modules"
+---
 
-When using frontends like **Slang** (via `read_slang` or `yosys-slang`), modules are often "uniquified" to handle parameters. This results in module names containing dollar signs and hierarchy paths (e.g., `submodule$top.u_sub`).
+# Targeting Specific Instances
 
-To configure a specific instance of a module without affecting all instances of that type, use the `specific_module_` prefix in your TOML file followed by the full uniquified name. In the TOML example above, `["specific_module_submodule$top.u_sub"]` targets exactly one instance.
+When using Slang-based frontends (`read_slang` / yosys-slang), parameterized modules are often **uniquified**.
 
-### Verilog Attributes
+Example uniquified name:
 
-You can also configure TMR directly in your Verilog source using attributes.
+```
+submodule$top.u_sub
+```
+
+To configure a single instance:
+
+```toml
+["specific_module_submodule$top.u_sub"]
+tmr_mode = "FullModuleTMR"
+```
+
+This affects **only that instance**, not all modules of the same type.
+
+---
+
+# Verilog Attribute Configuration
+
+TMR can also be controlled inline using attributes:
 
 ```verilog
 (* tmrx_tmr_mode = "FullModuleTMR" *)
-(* tmrx_tmr_voter = "Default" *)
 (* tmrx_preserve_module_ports = 1 *)
 module my_critical_module (
-    // ...
+    input clk,
+    input rst_n,
+    ...
 );
-
 ```
 
-Available attributes correspond to the TOML keys, prefixed with `tmrx_`:
+Supported attributes mirror TOML keys using the `tmrx_` prefix:
 
 * `(* tmrx_tmr_mode = "..." *)`
 * `(* tmrx_assign_to_group = "group_name" *)`
 * `(* tmrx_preserve_module_ports = 1 *)`
 * `(* tmrx_insert_voter_after_ff = 1 *)`
+* `(* tmrx_insert_voter_before_ff = 1 *)`
+* `(* tmrx_expand_clock = 1 *)`
 * etc.
+ 
+
+---
