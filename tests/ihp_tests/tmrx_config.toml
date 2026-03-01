@@ -3,7 +3,7 @@
 # tmr_mode = "FullModuleTMR"
 tmr_mode = "LogicTMR"
 tmr_voter = "Default"
-tmr_voter_safe_mode = true
+tmr_voter_safe_mode = false
 preserve_module_ports = true
 insert_voter_before_ff = false
 insert_voter_after_ff = true
@@ -53,7 +53,7 @@ insert_voter_after_ff = true
 tmr_mode_full_module_insert_voter_before_modules = true
 tmr_mode_full_module_insert_voter_after_modules = true
 clock_port_names = ["clk_i"]
-expand_clock = true
+expand_clock = false
 reset_port_names = ["rst_ni"]
 expand_reset = false
 ff_cells = ["DFF", "FDRE"]

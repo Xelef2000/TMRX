@@ -11,29 +11,86 @@ namespace {
 
 
     Yosys::pool<RTLIL::SigSpec> clk_net_wires;
-    Yosys::pool<Yosys::dict<RTLIL::Cell*, std::vector<RTLIL::IdString>>> clk_net_cells;
+    Yosys::pool<RTLIL::SigSpec> rst_net_wires;
 
     void build_clk_net(RTLIL::Module *mod, const ConfigManager *cfg_mgr){
         log_header(mod->design, "Building Clock Net\n");
 
-        const Config *cfg = cfg_mgr->cfg(mod);
-        for(auto *cell : mod->cells()){
-            log("Looking at Cell of type %s\n", mod->design->module(cell->type)->name.c_str() );
-            for (auto &conn : cell->connections()) {
-                IdString port_name = conn.first;
-                log("Port: %s\n", log_id(port_name));
+        clk_net_wires.clear();
 
-                Module *cell_mod = mod->design->module(cell->type);
-                if (cell_mod) {
-                    Wire *wire = cell_mod->wire(port_name);
-                    if (wire) {
-                        for (auto &attr : wire->attributes)
-                            log("  attr %s = %s\n", log_id(attr.first), attr.second.as_string().c_str());
-                    }
+        const Config *cfg = cfg_mgr->cfg(mod);
+        RTLIL::Design *design = mod->design;
+
+        // Add wires connected to clock ports of the current module
+        for (auto wire : mod->wires()) {
+            if ((wire->port_input || wire->port_output) && is_clk_wire(wire, cfg)) {
+                clk_net_wires.insert(RTLIL::SigSpec(wire));
+                log("Added module clock port wire: %s\n", wire->name.c_str());
+            }
+        }
+
+        // Add wires connected to clock ports of cells (submodules)
+        for (auto cell : mod->cells()) {
+            RTLIL::Module *cell_mod = design->module(cell->type);
+            if (cell_mod == nullptr || !is_proper_submodule(cell_mod)) {
+                continue;
+            }
+
+            const Config *cell_cfg = cfg_mgr->cfg(cell_mod);
+
+            for (auto &conn : cell->connections()) {
+                RTLIL::IdString port_name = conn.first;
+                RTLIL::Wire *port_wire = cell_mod->wire(port_name);
+
+                if (port_wire != nullptr && is_clk_wire(port_wire, cell_cfg)) {
+                    clk_net_wires.insert(conn.second);
+                    log("Added cell clock port connection: cell=%s, port=%s, sig=%s\n",
+                        cell->name.c_str(), port_name.c_str(), log_signal(conn.second));
                 }
             }
         }
 
+        log("Clock net contains %zu signals\n", clk_net_wires.size());
+    }
+
+    void build_rst_net(RTLIL::Module *mod, const ConfigManager *cfg_mgr){
+        log_header(mod->design, "Building Reset Net\n");
+
+        rst_net_wires.clear();
+
+        const Config *cfg = cfg_mgr->cfg(mod);
+        RTLIL::Design *design = mod->design;
+
+        // Add wires connected to reset ports of the current module
+        for (auto wire : mod->wires()) {
+            if ((wire->port_input || wire->port_output) && is_rst_wire(wire, cfg)) {
+                rst_net_wires.insert(RTLIL::SigSpec(wire));
+                log("Added module reset port wire: %s\n", wire->name.c_str());
+            }
+        }
+
+        // Add wires connected to reset ports of cells (submodules)
+        for (auto cell : mod->cells()) {
+            RTLIL::Module *cell_mod = design->module(cell->type);
+            if (cell_mod == nullptr || !is_proper_submodule(cell_mod)) {
+                continue;
+            }
+
+            const Config *cell_cfg = cfg_mgr->cfg(cell_mod);
+
+            for (auto &conn : cell->connections()) {
+                RTLIL::IdString port_name = conn.first;
+                RTLIL::Wire *port_wire = cell_mod->wire(port_name);
+
+                if (port_wire != nullptr && is_rst_wire(port_wire, cell_cfg)) {
+                    rst_net_wires.insert(conn.second);
+                    log("Added cell reset port connection: cell=%s, port=%s, sig=%s\n",
+                        cell->name.c_str(), port_name.c_str(), log_signal(conn.second));
+                }
+            }
+        }
+
+        log("Reset net contains %zu signals\n", rst_net_wires.size());
     }
 
 
@@ -408,6 +465,7 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr) {
         zip_dicts(flipflopmap_b, flipflopmap_c);
 
         build_clk_net(mod, cfg_mgr);
+        build_rst_net(mod, cfg_mgr);
 
     for (auto cell : original_cells) {
         RTLIL::Module *cell_mod = mod->design->module(cell->type);
