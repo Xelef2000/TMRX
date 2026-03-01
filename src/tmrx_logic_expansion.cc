@@ -1,5 +1,6 @@
 #include "tmrx_logic_expansion.h"
 #include "config_manager.h"
+#include "kernel/log.h"
 #include "kernel/rtlil.h"
 #include "tmrx_utils.h"
 #include "utils.h"
@@ -12,9 +13,26 @@ namespace {
     Yosys::pool<RTLIL::SigSpec> clk_net_wires;
     Yosys::pool<Yosys::dict<RTLIL::Cell*, std::vector<RTLIL::IdString>>> clk_net_cells;
 
-    void build_clk_net(RTLIL::Module *mod, const ConfigManager cfg_mgr){
-        const Config *cfg = cfg_mgr.cfg(mod);
+    void build_clk_net(RTLIL::Module *mod, const ConfigManager *cfg_mgr){
+        log_header(mod->design, "Building Clock Net\n");
 
+        const Config *cfg = cfg_mgr->cfg(mod);
+        for(auto *cell : mod->cells()){
+            log("Looking at Cell of type %s\n", mod->design->module(cell->type)->name.c_str() );
+            for (auto &conn : cell->connections()) {
+                IdString port_name = conn.first;
+                log("Port: %s\n", log_id(port_name));
+
+                Module *cell_mod = mod->design->module(cell->type);
+                if (cell_mod) {
+                    Wire *wire = cell_mod->wire(port_name);
+                    if (wire) {
+                        for (auto &attr : wire->attributes)
+                            log("  attr %s = %s\n", log_id(attr.first), attr.second.as_string().c_str());
+                    }
+                }
+            }
+        }
 
     }
 
@@ -366,7 +384,7 @@ insert_duplicate_logic(RTLIL::Module *mod, std::vector<RTLIL::Wire *> wires,
     return {wire_map, output_map, flip_flop_map};
 }
 
-} // namespace
+}
 void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr) {
     const Config *cfg = cfg_mgr->cfg(mod);
 
@@ -388,6 +406,8 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr) {
         zip_dicts(wiremap_b, wiremap_c);
     dict<RTLIL::Cell *, std::pair<RTLIL::Cell *, RTLIL::Cell *>> combined_ff_map =
         zip_dicts(flipflopmap_b, flipflopmap_c);
+
+        build_clk_net(mod, cfg_mgr);
 
     for (auto cell : original_cells) {
         RTLIL::Module *cell_mod = mod->design->module(cell->type);
