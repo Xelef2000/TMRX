@@ -14,20 +14,6 @@ namespace {
 
     void build_clk_net(RTLIL::Module *mod, const ConfigManager cfg_mgr){
         const Config *cfg = cfg_mgr.cfg(mod);
-        // backwards pass
-
-    // for (auto port : mod->ports) {
-    //     RTLIL::Wire *w = mod->wire(port);
-
-    //     if(w == nullptr){
-    //         continue;
-    //     }
-
-    //     if(!is_clk_wire(w,cfg) && !){
-
-    //     }
-
-    // }
 
 
     }
@@ -422,19 +408,17 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr) {
 
     rename_wires_and_cells(mod, original_wires, original_cells, cfg->logic_path_1_suffix, cfg);
 
-    if (cfg->preserve_module_ports || !cfg->expand_clock || !cfg->expand_reset) {
-        auto v_err_w = insert_output_voters(mod, combined_output_map, cfg);
-        error_wires.insert(error_wires.end(), v_err_w.begin(), v_err_w.end());
-    }
-
-    // insert ff voters
-
     if (cfg->insert_voter_before_ff) {
         log_error("Insert before ff not yet implemented");
     }
 
     if (cfg->insert_voter_after_ff) {
         auto v_err_w = insert_voter_after_ff(mod, combined_ff_map, cfg);
+        error_wires.insert(error_wires.end(), v_err_w.begin(), v_err_w.end());
+    }
+
+    if (cfg->preserve_module_ports || !cfg->expand_clock || !cfg->expand_reset) {
+        auto v_err_w = insert_output_voters(mod, combined_output_map, cfg);
         error_wires.insert(error_wires.end(), v_err_w.begin(), v_err_w.end());
     }
 

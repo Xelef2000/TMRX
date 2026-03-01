@@ -93,9 +93,38 @@ get_port_names(const RTLIL::Cell *cell, const RTLIL::Design *design) {
     return {inputs, outputs};
 }
 
-RTLIL::IdString createVoterCell(RTLIL::Design *design, size_t wire_width) {
-    // TODO: make voter behaviour more predictable
-    RTLIL::IdString voter_name = "\\tmrx_simple_voter_" + std::to_string(wire_width);
+static std::string get_signal_name(const RTLIL::SigSpec &sig) {
+    if (sig.is_wire()) {
+        std::string name = sig.as_wire()->name.str();
+        if (!name.empty() && name[0] == '\\') {
+            name = name.substr(1);
+        }
+        return name;
+    } else if (sig.is_chunk()) {
+        const RTLIL::SigChunk &chunk = sig.as_chunk();
+        if (chunk.wire != nullptr) {
+            std::string name = chunk.wire->name.str();
+            if (!name.empty() && name[0] == '\\') {
+                name = name.substr(1);
+            }
+            return name;
+        }
+    } else {
+        for (const auto &chunk : sig.chunks()) {
+            if (chunk.wire != nullptr) {
+                std::string name = chunk.wire->name.str();
+                if (!name.empty() && name[0] == '\\') {
+                    name = name.substr(1);
+                }
+                return name;
+            }
+        }
+    }
+    return "const";
+}
+
+RTLIL::IdString createVoterCell(RTLIL::Design *design, size_t wire_width, const std::string &name_prefix) {
+    RTLIL::IdString voter_name = "\\tmrx_voter_" + name_prefix + "_w" + std::to_string(wire_width);
 
     if (design->module(voter_name) != nullptr) {
         return voter_name;
@@ -132,9 +161,83 @@ RTLIL::IdString createVoterCell(RTLIL::Design *design, size_t wire_width) {
     return voter_name;
 }
 
-// TODO: remove mod and design
+static bool is_port_output(const RTLIL::Cell *cell, RTLIL::IdString port_name, RTLIL::Design *design) {
+    RTLIL::Module *cell_mod = design->module(cell->type);
+    if (cell_mod) {
+        cell_mod->fixup_ports();
+        RTLIL::Wire *wire = cell_mod->wire(port_name);
+        if (wire) {
+            return wire->port_output;
+        }
+    }
+    return cell->output(port_name);
+}
+
+static bool is_signal_unconnected(const RTLIL::SigSpec &sig, RTLIL::Module *module) {
+    if (sig.is_fully_const()) {
+        for (auto &bit : sig.bits()) {
+            if (bit.data == RTLIL::State::Sx || bit.data == RTLIL::State::Sz) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    RTLIL::Design *design = module->design;
+
+    pool<RTLIL::SigBit> driven_bits;
+
+    for (auto wire : module->wires()) {
+        if (wire->port_input) {
+            for (int i = 0; i < wire->width; i++) {
+                driven_bits.insert(RTLIL::SigBit(wire, i));
+            }
+        }
+    }
+
+    for (auto cell : module->cells()) {
+        for (auto &conn : cell->connections()) {
+            if (is_port_output(cell, conn.first, design)) {
+                for (auto &bit : conn.second.bits()) {
+                    if (bit.wire != nullptr) {
+                        driven_bits.insert(bit);
+                    }
+                }
+            }
+        }
+    }
+
+    for (auto &conn : module->connections()) {
+        for (auto &bit : conn.first.bits()) {
+            if (bit.wire != nullptr) {
+                driven_bits.insert(bit);
+            }
+        }
+    }
+
+    for (auto &bit : sig.bits()) {
+        if (bit.wire != nullptr && driven_bits.count(bit) == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool is_signal_constant(const RTLIL::SigSpec &sig) {
+    if (!sig.is_fully_const()) {
+        return false;
+    }
+    for (auto &bit : sig.bits()) {
+        if (bit.data != RTLIL::State::S0 && bit.data != RTLIL::State::S1) {
+            return false;
+        }
+    }
+    return true;
+}
+
 std::pair<RTLIL::Wire *, RTLIL::Wire *>
-insert_voter(RTLIL::Module *module,const std::vector<RTLIL::SigSpec> &inputs, const Config *cfg) {
+insert_voter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, const Config *cfg) {
     if (inputs.size() != 3) {
         log_error("Voters are only intended to be inserted with 3 inputs");
     }
@@ -143,20 +246,38 @@ insert_voter(RTLIL::Module *module,const std::vector<RTLIL::SigSpec> &inputs, co
 
     size_t wire_width = inputs.at(0).size();
 
-    // if(cfg->tmr_voter_safe_mode){
+    std::string sig_name_a = get_signal_name(inputs.at(0));
+    std::string sig_name_b = get_signal_name(inputs.at(1));
+    std::string sig_name_c = get_signal_name(inputs.at(2));
 
-    //     Yosys::SigMap sigmap(module);
+    std::string mod_name = module->name.str();
+    if (!mod_name.empty() && mod_name[0] == '\\') {
+        mod_name = mod_name.substr(1);
+    }
 
-    //     for(size_t i = 0; i<3;i++){
-    //         SigSpec sig = sigmap(original_sig);
-    //     }
+    std::string name_prefix = mod_name + "_" + sig_name_a + "_" + sig_name_b + "_" + sig_name_c;
 
+    if (cfg->tmr_voter_safe_mode) {
+        std::vector<std::string> input_names = {"a", "b", "c"};
 
+        for (size_t i = 0; i < 3; i++) {
+            const RTLIL::SigSpec &sig = inputs.at(i);
 
-    // }
+            if (is_signal_unconnected(sig, module)) {
+                log_error("TMRX Safe Mode: Voter input '%s' in module '%s' is not connected (signal: %s). "
+                          "All voter inputs must be driven.\n",
+                          input_names[i].c_str(), module->name.c_str(), log_signal(sig));
+            }
 
+            if (is_signal_constant(sig)) {
+                log_warning("TMRX Safe Mode: Voter input '%s' in module '%s' is connected to a constant value (signal: %s). "
+                            "This may indicate a configuration or connection issue.\n",
+                            input_names[i].c_str(), module->name.c_str(), log_signal(sig));
+            }
+        }
+    }
 
-    RTLIL::IdString voter_name = createVoterCell(design, wire_width);
+    RTLIL::IdString voter_name = createVoterCell(design, wire_width, name_prefix);
 
     RTLIL::Wire *last_wire = module->addWire(NEW_ID, wire_width);
     RTLIL::Wire *err_wire = module->addWire(NEW_ID, wire_width);
