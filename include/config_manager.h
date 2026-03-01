@@ -45,6 +45,27 @@ enum class TmrMode {
 
 enum class TmrVoter { Default };
 
+// String conversion helpers
+std::optional<TmrMode> parse_tmr_mode(const std::string &str);
+std::string tmr_mode_to_string(TmrMode mode);
+std::optional<TmrVoter> parse_tmr_voter(const std::string &str);
+std::string tmr_voter_to_string(TmrVoter voter);
+
+// TOML parsing helpers
+template<typename T>
+std::optional<T> toml_find_optional(const toml::value &t, const std::string &key);
+
+std::optional<Yosys::pool<Yosys::RTLIL::IdString>>
+toml_parse_idstring_pool(const toml::value &t, const std::string &key);
+
+// Config assembly helper
+template<typename T>
+void apply_if_present(T &dest, const std::optional<T> &src);
+
+// String formatting helpers
+std::string pool_to_string(const Yosys::pool<Yosys::RTLIL::IdString> &pool);
+std::string bool_to_string(bool val);
+
 struct Config {
 
     TmrMode tmr_mode;
@@ -110,6 +131,8 @@ struct ConfigManager {
     void load_global_default_cfg();
     void load_default_groups_cfg();
     void validate_cfg();
+
+    // Attribute parsing helpers
     std::string get_string_attr_value_or(const Yosys::RTLIL::Module *mod, const std::string &attr,
                                          const std::string &def);
     bool get_bool_attr_value_or(const Yosys::RTLIL::Module *mod, const std::string &attr, bool def);
@@ -118,9 +141,24 @@ struct ConfigManager {
     std::optional<bool> get_bool_attr_value(const Yosys::RTLIL::Module *mod, const std::string &attr);
     std::optional<int> get_int_attr_value(const Yosys::RTLIL::Module *mod, const std::string &attr);
     std::optional<std::vector<std::string>> get_string_list_attr_value(const Yosys::RTLIL::Module *mod, const std::string &attr);
+    std::optional<Yosys::pool<Yosys::RTLIL::IdString>>
+    parse_attr_idstring_pool(const Yosys::RTLIL::Module *mod, const std::string &attr);
+
+    // Config parsing and assembly
     ConfigPart parse_config(const toml::value &t);
     ConfigPart parse_module_annotations(const Yosys::RTLIL::Module *mod);
     Config assemble_config(std::vector<ConfigPart> parts, Config def);
+
+    // Config assembly helpers
+    void append_group_configs(
+        std::vector<ConfigPart> &cfg_parts,
+        const Yosys::dict<Yosys::RTLIL::IdString, std::vector<std::string>> &group_assignments,
+        Yosys::RTLIL::IdString lookup_name,
+        Yosys::RTLIL::IdString log_name);
+    void append_config_if_present(
+        std::vector<ConfigPart> &cfg_parts,
+        const Yosys::dict<Yosys::RTLIL::IdString, ConfigPart> &cfg_map,
+        Yosys::RTLIL::IdString key);
 
 
     Config global_cfg;
