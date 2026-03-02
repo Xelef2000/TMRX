@@ -344,7 +344,7 @@ insert_output_voters(RTLIL::Module *mod,
         outputs.second.second->port_output = false;
         out_sigs.push_back(outputs.second.second);
 
-        if(out_sigs.at(0) == out_sigs.at(1) && out_sigs.at(0) == out_sigs.at(2)) continue;
+        // if(out_sigs.at(0) == out_sigs.at(1) && out_sigs.at(0) == out_sigs.at(2)) continue;
 
         std::pair<RTLIL::Wire *, RTLIL::Wire *> res_wires =
             insert_voter(mod, out_sigs, cfg);
@@ -393,7 +393,7 @@ insert_duplicate_logic(RTLIL::Module *mod, std::vector<RTLIL::Wire *> wires,
 
     for (auto w : wires) {
 
-        log("Wire %s is clock: %i\n", w->name.c_str(), is_in_clk_net(w));
+        // log("Wire %s is clock: %i\n", w->name.c_str(), is_in_clk_net(w));
         // Skip duplication for clock/reset wires when not expanding them
         // This applies to BOTH input and output clock/reset ports
         if ((cfg->preserve_module_ports && w->port_input) ||
