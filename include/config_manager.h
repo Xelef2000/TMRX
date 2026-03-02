@@ -20,10 +20,13 @@ const std::string cfg_specific_module_prefix = "specific_module_";
 const std::string cfg_group_assignment_attr_name = "\\tmrx_assign_to_group";
 const std::string cfg_tmr_mode_attr_name = "\\tmrx_tmr_mode";
 const std::string cfg_tmr_voter_attr_name = "\\tmrx_tmr_voter";
+const std::string cfg_tmr_voter_safe_mode_attr_name = "\\tmrx_tmr_voter_safe_mode";
 const std::string cfg_tmr_mode_full_module_insert_voter_before_modules_attr_name =
     "\\tmrx_tmr_mode_full_module_insert_voter_before_modules";
 const std::string cfg_tmr_mode_full_module_insert_voter_after_modules_attr_name =
     "\\tmrx_tmr_mode_full_module_insert_voter_after_modules";
+const std::string cfg_tmr_mode_full_module_insert_voter_on_clock_nets_attr_name =
+        "\\tmrx_tmr_mode_full_module_insert_voter_on_clock_nets";
 const std::string cfg_tmr_preserve_module_ports_attr_name = "\\tmrx_tmr_preserve_module_ports";
 const std::string cfg_insert_voter_before_ff_attr_name = "\\tmrx_insert_voter_before_ff";
 const std::string cfg_insert_voter_after_ff_attr_name = "\\tmrx_insert_voter_after_ff";
@@ -73,6 +76,8 @@ struct Config {
 
     TmrVoter tmr_voter;
 
+    bool tmr_voter_safe_mode;
+
     bool preserve_module_ports;
 
     bool insert_voter_before_ff;
@@ -80,6 +85,7 @@ struct Config {
 
     bool tmr_mode_full_module_insert_voter_before_modules;
     bool tmr_mode_full_module_insert_voter_after_modules;
+    bool tmr_mode_full_module_insert_voter_on_clock_nets;
 
     Yosys::pool<Yosys::RTLIL::IdString> clock_port_names;
     bool expand_clock;
@@ -102,6 +108,7 @@ struct ConfigPart {
     std::optional<TmrMode> tmr_mode;
 
     std::optional<TmrVoter> tmr_voter;
+    std::optional<bool> tmr_voter_safe_mode;
 
     std::optional<bool> preserve_module_ports;
 
@@ -110,6 +117,7 @@ struct ConfigPart {
 
     std::optional<bool> tmr_mode_full_module_insert_voter_before_modules;
     std::optional<bool> tmr_mode_full_module_insert_voter_after_modules;
+    std::optional<bool> tmr_mode_full_module_insert_voter_on_clock_nets;
 
     std::optional<Yosys::pool<Yosys::RTLIL::IdString>> clock_port_names;
     std::optional<bool> expand_clock;

@@ -3,11 +3,13 @@
 # tmr_mode = "FullModuleTMR"
 tmr_mode = "LogicTMR"
 tmr_voter = "Default"
+tmr_voter_safe_mode = false
 preserve_module_ports = false
 insert_voter_before_ff = false
 insert_voter_after_ff = true
 tmr_mode_full_module_insert_voter_before_modules = true
 tmr_mode_full_module_insert_voter_after_modules = true
+tmr_mode_full_module_insert_voter_on_clock_nets = false
 clock_port_names = ["clk_i"]
 expand_clock = false
 reset_port_names = ["rst_ni"]
@@ -44,7 +46,8 @@ logic_path_3_suffix = "_c"
 tmr_mode = "FullModuleTMR"
 # tmr_mode = "LogicTMR"
 tmr_voter = "Default"
-preserve_module_ports = true
+tmr_voter_safe_mode = true
+preserve_module_ports = false
 insert_voter_before_ff = false
 insert_voter_after_ff = true
 tmr_mode_full_module_insert_voter_before_modules = true
@@ -59,6 +62,7 @@ excluded_ff_cells = ["FDSE"]
 logic_path_1_suffix = "_a"
 logic_path_2_suffix = "_b"
 logic_path_3_suffix = "_c"
+
 
 [module_groups]
 mod1 = "A"

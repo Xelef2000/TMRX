@@ -76,7 +76,7 @@ void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
     if (cfg->tmr_mode_full_module_insert_voter_before_modules && !cfg->preserve_module_ports) {
         for (auto wm : wire_map) {
             if (!wm.first->port_input || (is_clk_wire(wm.first, cfg) && !cfg->expand_clock) ||
-                (is_rst_wire(wm.first, cfg) && !cfg->expand_reset)) {
+                (is_rst_wire(wm.first, cfg) && !cfg->expand_reset)|| (is_clk_wire(wm.first,cfg) && !cfg->tmr_mode_full_module_insert_voter_on_clock_nets )) {
                 continue;
             }
 
@@ -84,7 +84,7 @@ void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
 
             for (size_t i = 0; i < 3; i++) {
                 auto [v_out, err] = insert_voter(
-                    wrapper, {wm.second.at(0), wm.second.at(1), wm.second.at(2)}, wrapper->design);
+                    wrapper, {wm.second.at(0), wm.second.at(1), wm.second.at(2)}, cfg);
                 error_wires.push_back(err);
                 voter_outs.push_back(v_out);
             }
@@ -97,7 +97,7 @@ void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
         for (auto wm : wire_map) {
             if (!wm.first->port_output || is_tmr_error_out_wire(wm.first) ||
                 (is_clk_wire(wm.first, cfg) && !cfg->expand_clock) ||
-                (is_rst_wire(wm.first, cfg) && !cfg->expand_reset)) {
+                (is_rst_wire(wm.first, cfg) && !cfg->expand_reset) || (is_clk_wire(wm.first,cfg) && !cfg->tmr_mode_full_module_insert_voter_on_clock_nets )) {
                 continue;
             }
 
@@ -108,7 +108,7 @@ void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
                     insert_voter(wrapper,
                                  {cell_ports.at(0).at(wm.first), cell_ports.at(1).at(wm.first),
                                   cell_ports.at(2).at(wm.first)},
-                                 wrapper->design);
+                                 cfg);
                 error_wires.push_back(err);
                 voter_outs.push_back(v_out);
             }
@@ -132,7 +132,7 @@ void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
                     insert_voter(wrapper,
                                  {cell_ports.at(0).at(wm.first), cell_ports.at(1).at(wm.first),
                                   cell_ports.at(2).at(wm.first)},
-                                 wrapper->design);
+                                 cfg);
                 error_wires.push_back(err);
                 cell_ports.at(0).at(wm.first) = v_out;
                 cell_ports.at(1).at(wm.first) = v_out;

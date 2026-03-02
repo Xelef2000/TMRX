@@ -17,11 +17,11 @@ bool is_tmr_error_out_wire(RTLIL::Wire *w);
 
 std::pair<std::vector<RTLIL::IdString>, std::vector<RTLIL::IdString>>
 get_port_names(const RTLIL::Cell *cell, const RTLIL::Design *design);
-RTLIL::IdString createVoterCell(RTLIL::Design *design, size_t wire_width);
+RTLIL::IdString createVoterCell(RTLIL::Design *design, size_t wire_width, const std::string &name_prefix);
 std::pair<RTLIL::Wire *, RTLIL::Wire *>
-insert_voter(RTLIL::Module *module, std::vector<RTLIL::SigSpec> inputs, RTLIL::Design *design);
+insert_voter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, const Config *cfg);
 
-void connect_error_signal(RTLIL::Module *mod, std::vector<RTLIL::Wire *> error_signals);
+void connect_error_signal(RTLIL::Module *mod,const std::vector<RTLIL::Wire *> &error_signals);
 
 }
 YOSYS_NAMESPACE_END
