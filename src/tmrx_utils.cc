@@ -239,7 +239,7 @@ static bool is_signal_constant(const RTLIL::SigSpec &sig) {
 std::pair<RTLIL::Wire *, RTLIL::Wire *>
 insert_voter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, const Config *cfg) {
     if (inputs.size() != 3) {
-        log_error("Voters are only intended to be inserted with 3 inputs");
+        log_error("Voters are only intended to be inserted with 3 inputs\n");
     }
 
     RTLIL::Design *design = module->design;
@@ -275,7 +275,26 @@ insert_voter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, c
                             input_names[i].c_str(), module->name.c_str(), log_signal(sig));
             }
         }
-    }
+    } else {
+            // Optimization: If safe mode is off and all 3 inputs are logically the same, skip voter.
+            // We use SigMap to resolve wires that are electrically connected to the same canonical signal.
+            SigMap sigmap(module);
+
+            if (sigmap(inputs.at(0)) == sigmap(inputs.at(1)) &&
+                sigmap(inputs.at(1)) == sigmap(inputs.at(2))) {
+
+                RTLIL::Wire *last_wire = module->addWire(NEW_ID, wire_width);
+                RTLIL::Wire *err_wire = module->addWire(NEW_ID, wire_width);
+
+                // Connect output directly to the input signal
+                module->connect(last_wire, inputs.at(0));
+
+                // Connect error wire to constant 0 (State::S0) matching the wire width
+                module->connect(err_wire, RTLIL::SigSpec(RTLIL::State::S0, wire_width));
+
+                return {last_wire, err_wire};
+            }
+        }
 
     RTLIL::IdString voter_name = createVoterCell(design, wire_width, name_prefix);
 
