@@ -21,12 +21,11 @@ namespace {
         return rst_net_wires.count(RTLIL::SigSpec(w)) != 0;
     }
 
-    void build_clk_net(RTLIL::Module *mod, const ConfigManager *cfg_mgr){
+    void build_clk_net(RTLIL::Module *mod, const ConfigManager *cfg_mgr, const Config *cfg){
         log_header(mod->design, "Building Clock Net\n");
 
         clk_net_wires.clear();
 
-        const Config *cfg = cfg_mgr->cfg(mod);
         RTLIL::Design *design = mod->design;
 
         // Add wires connected to clock ports of the current module
@@ -61,12 +60,11 @@ namespace {
         log("Clock net contains %zu signals\n", clk_net_wires.size());
     }
 
-    void build_rst_net(RTLIL::Module *mod, const ConfigManager *cfg_mgr){
+    void build_rst_net(RTLIL::Module *mod, const ConfigManager *cfg_mgr, const Config *cfg){
         log_header(mod->design, "Building Reset Net\n");
 
         rst_net_wires.clear();
 
-        const Config *cfg = cfg_mgr->cfg(mod);
         RTLIL::Design *design = mod->design;
 
         // Add wires connected to reset ports of the current module
@@ -472,24 +470,39 @@ insert_duplicate_logic(RTLIL::Module *mod, std::vector<RTLIL::Wire *> wires,
 void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr) {
     const Config *cfg = cfg_mgr->cfg(mod);
 
-    std::vector<RTLIL::Wire *> original_wires(mod->wires().begin(), mod->wires().end());
-    std::vector<RTLIL::Cell *> original_cells(mod->cells().begin(), mod->cells().end());
-    std::vector<RTLIL::SigSig> original_connections(mod->connections().begin(),
-                                                    mod->connections().end());
+    // When preserve_module_ports=false and this is a proper submodule, clone the
+    // module and expand the clone instead of the original. This ensures FullModuleTMR
+    // parents can still connect to the original module's unchanged port interface.
+    RTLIL::Module *target = mod;
+    if (!cfg->preserve_module_ports && is_proper_submodule(mod)) {
+        RTLIL::IdString impl_name = RTLIL::IdString(mod->name.str() + "_tmrx_impl");
+        target = mod->design->addModule(impl_name);
+        mod->cloneInto(target);
+        target->name = impl_name;
+        target->set_bool_attribute(ID(tmrx_is_proper_submodule), true);
+        mod->set_string_attribute(ID(tmrx_impl_module), impl_name.str());
+        log("Cloned module %s to %s for LogicTMR expansion\n",
+            mod->name.c_str(), impl_name.c_str());
+    }
+
+    std::vector<RTLIL::Wire *> original_wires(target->wires().begin(), target->wires().end());
+    std::vector<RTLIL::Cell *> original_cells(target->cells().begin(), target->cells().end());
+    std::vector<RTLIL::SigSig> original_connections(target->connections().begin(),
+                                                    target->connections().end());
     std::vector<RTLIL::Wire *> error_wires;
 
-    log_header(mod->design, "Logic TMR expansion");
+    log_header(target->design, "Logic TMR expansion");
 
-    build_clk_net(mod, cfg_mgr);
-    build_rst_net(mod, cfg_mgr);
+    build_clk_net(target, cfg_mgr, cfg);
+    build_rst_net(target, cfg_mgr, cfg);
 
     auto [wiremap_b, outputmap_b, flipflopmap_b] = insert_duplicate_logic(
-        mod, original_wires, original_cells, original_connections, cfg->logic_path_2_suffix, cfg);
+        target, original_wires, original_cells, original_connections, cfg->logic_path_2_suffix, cfg);
     auto [wiremap_c, outputmap_c, flipflopmap_c] = insert_duplicate_logic(
-        mod, original_wires, original_cells, original_connections, cfg->logic_path_3_suffix, cfg);
+        target, original_wires, original_cells, original_connections, cfg->logic_path_3_suffix, cfg);
 
-    build_clk_net(mod, cfg_mgr);
-    build_rst_net(mod, cfg_mgr);
+    build_clk_net(target, cfg_mgr, cfg);
+    build_rst_net(target, cfg_mgr, cfg);
 
 
     dict<RTLIL::Wire *, std::pair<RTLIL::Wire *, RTLIL::Wire *>> combined_output_map =
@@ -500,43 +513,60 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr) {
         zip_dicts(flipflopmap_b, flipflopmap_c);
 
     for (auto cell : original_cells) {
-        RTLIL::Module *cell_mod = mod->design->module(cell->type);
+        RTLIL::Module *cell_mod = target->design->module(cell->type);
         if (!is_proper_submodule(cell_mod)) {
             continue;
         }
+
+        // If the submodule was expanded with preserve_module_ports=false, it has a
+        // _tmrx_impl copy with triplicated ports. Remap this cell to that impl so
+        // the parent's triplicated wires connect to the child's triplicated ports.
+        if (cell_mod->has_attribute(ID(tmrx_impl_module))) {
+            RTLIL::IdString cell_impl_name = RTLIL::IdString(
+                cell_mod->get_string_attribute(ID(tmrx_impl_module)));
+            log("Remapping cell %s from %s to impl %s\n",
+                cell->name.c_str(), cell->type.c_str(), cell_impl_name.c_str());
+            cell->type = cell_impl_name;
+            cell_mod = target->design->module(cell_impl_name);
+        }
+
         const Config *cell_cfg = cfg_mgr->cfg(cell_mod);
         std::vector<RTLIL::Wire *> v_err_w;
 
-        log_header(mod->design, "Connecting submodules\n");
+        log_header(target->design, "Connecting submodules\n");
         if (cell_cfg->preserve_module_ports) {
-            v_err_w = connect_submodules_preserver_mod_ports(mod, cell, combined_wire_map, cfg);
+            v_err_w = connect_submodules_preserver_mod_ports(target, cell, combined_wire_map, cfg);
         } else {
-            v_err_w = connect_submodules_mod_ports(mod, cell, cell_cfg, cfg, combined_wire_map);
+            v_err_w = connect_submodules_mod_ports(target, cell, cell_cfg, cfg, combined_wire_map);
         }
         error_wires.insert(error_wires.end(), v_err_w.begin(), v_err_w.end());
     }
 
-    rename_wires_and_cells(mod, original_wires, original_cells, cfg->logic_path_1_suffix, cfg);
+    rename_wires_and_cells(target, original_wires, original_cells, cfg->logic_path_1_suffix, cfg);
 
     if (cfg->insert_voter_before_ff) {
         log_error("Insert before ff not yet implemented");
     }
 
     if (cfg->insert_voter_after_ff) {
-        auto v_err_w = insert_voter_after_ff(mod, combined_ff_map, cfg);
+        auto v_err_w = insert_voter_after_ff(target, combined_ff_map, cfg);
         error_wires.insert(error_wires.end(), v_err_w.begin(), v_err_w.end());
     }
 
-    build_clk_net(mod, cfg_mgr);
-    build_rst_net(mod, cfg_mgr);
+    build_clk_net(target, cfg_mgr, cfg);
+    build_rst_net(target, cfg_mgr, cfg);
 
 
     if (cfg->preserve_module_ports || !cfg->expand_clock || !cfg->expand_reset) {
-        auto v_err_w = insert_output_voters(mod, combined_output_map, cfg);
+        auto v_err_w = insert_output_voters(target, combined_output_map, cfg);
         error_wires.insert(error_wires.end(), v_err_w.begin(), v_err_w.end());
     }
 
-    connect_error_signal(mod, error_wires);
+    connect_error_signal(target, error_wires);
+
+    if (target != mod) {
+        target->fixup_ports();
+    }
 }
 
 }
