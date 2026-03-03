@@ -39,3 +39,59 @@ show -format dot -prefix final_netlist top
 
 
 stat -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+
+# ============================================================
+# 1. Prepare Gold RTL
+# ============================================================
+design -reset
+
+read_slang --top top ihp_dummy.v \
+        --compat-mode --keep-hierarchy \
+        --allow-use-before-declare --ignore-unknown-modules
+
+prep -top top
+flatten
+clean
+# Stash this design space away securely under the name 'gold'
+design -stash gold
+
+
+# ============================================================
+# 2. Prepare Synthesized Netlist
+# ============================================================
+design -reset
+
+# Generate behavioral white-box models from Liberty
+read_liberty -ignore_miss_func @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+
+read_verilog 08_final.v
+prep -top top
+flatten
+clean
+# Stash this design space away securely under the name 'gate'
+design -stash gate
+
+
+# ============================================================
+# 3. Build Equivalence Miter
+# ============================================================
+design -reset
+
+# Pull the flattened 'top' modules from both stashes into the current workspace
+design -copy-from gold -as gold_top top
+design -copy-from gate -as synth_top top
+
+# Now we safely have both modules ready for the miter!
+equiv_make gold_top synth_top equiv
+prep -top equiv
+
+
+# ============================================================
+# 4. Sequential Proof
+# ============================================================
+chformal -assume -early rst_ni 0
+equiv_simple
+equiv_induct -undef
+equiv_status -assert
+
+echo "=== LEC PASSED: Final netlist equivalent to RTL ==="
