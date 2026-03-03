@@ -41,6 +41,7 @@ void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
     std::vector<RTLIL::Wire *> error_wires;
 
     RTLIL::IdString org_mod_name = mod->name;
+    log("  Full Module TMR: creating 3-instance wrapper for '%s'\n", org_mod_name.c_str());
     std::string mod_name = mod->name.str() + "_tmrx_worker";
 
     mod->design->rename(mod, mod_name);

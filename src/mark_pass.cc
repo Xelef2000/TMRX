@@ -16,18 +16,17 @@ struct TMRXMarkPass : public Pass {
 
         for (auto module : design->modules()) {
             if (design->selected(module) && !module->get_blackbox_attribute()) {
-                log("Scanning module %s for FFs\n", log_id(module));
-                for (auto cell : module->cells()) {
-                    log("Looking at cell %s: ", cell->type.c_str());
+                int ff_count = 0;
+                int submod_count = 0;
 
+                for (auto cell : module->cells()) {
                     if (RTLIL::builtin_ff_cell_types().count(cell->type) > 0) {
-                        log("Cell is ff");
+                        ff_count++;
                         if (cell->has_attribute(ID::src)) {
                             std::string src = cell->get_string_attribute(ID::src);
                             ff_sources[module->name].insert(src);
                         }
                     }
-                    log("\n");
                 }
 
                 // mark submodules
@@ -35,8 +34,12 @@ struct TMRXMarkPass : public Pass {
                     if (design->module(c->type) != nullptr) {
                         design->module(c->type)->set_bool_attribute(ATTRIBUTE_IS_PROPER_SUBMODULE,
                                                                     true);
+                        submod_count++;
                     }
                 }
+
+                log("Module '%s': %d flip-flop(s), %d submodule instance(s)\n",
+                    log_id(module), ff_count, submod_count);
             }
         }
         log_pop();

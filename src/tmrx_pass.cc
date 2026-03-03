@@ -27,12 +27,6 @@ struct TmrxPass : public Pass {
         log_header(design, "Executing TMRX pass (Triple Modular Redundancy).\n");
         log_push();
 
-        // TODO: remove
-        log("args passed: %i\n", args.size());
-        for (auto argm : args) {
-            log("%s\n", argm);
-        }
-
         std::string config_file = "";
 
         for (size_t arg = 1; arg < args.size(); arg++) {
@@ -45,9 +39,6 @@ struct TmrxPass : public Pass {
 
         ConfigManager cfg_mgr(design, config_file);
 
-        log("\n");
-
-        log_header(design, "Sorting modules\n");
         TopoSort<RTLIL::IdString> modules_to_process;
 
         for (auto module : design->modules()) {
@@ -74,15 +65,14 @@ struct TmrxPass : public Pass {
             if (!worker)
                 continue;
 
-            log("Processing Module %s\n", mod_name.c_str());
-            log_pop();
-            log_push();
-
             const Config *cfg = cfg_mgr.cfg(worker);
 
             if (cfg->tmr_mode == TmrMode::None) {
                 continue;
             }
+
+            log("Processing module '%s' [%s]\n", mod_name.c_str(),
+                tmr_mode_to_string(cfg->tmr_mode).c_str());
 
             // When preserve_module_ports=false and this is a proper submodule,
             // clone the module before expansion. The clone is what gets expanded
@@ -99,7 +89,7 @@ struct TmrxPass : public Pass {
                 target->name = impl_name;
                 target->set_bool_attribute(ID(tmrx_is_proper_submodule), true);
                 worker->set_string_attribute(ID(tmrx_impl_module), impl_name.str());
-                log("Cloned %s -> %s for TMR expansion\n",
+                log("  Cloned '%s' -> '%s' for port-preserving expansion\n",
                     worker->name.c_str(), impl_name.c_str());
             }
 
