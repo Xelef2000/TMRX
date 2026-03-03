@@ -353,7 +353,7 @@ void ConfigManager::append_config_if_present(
 }
 
 ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cfg_file) {
-    Yosys::log_header(design, "stated arg parsing");
+    Yosys::log_header(design, "Loading TMRX configuration\n");
     load_global_default_cfg();
     load_default_groups_cfg();
 
@@ -374,14 +374,12 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
             "Config file empty, tmrx will proceed with default config and annotation");
     }
 
-    Yosys::log_header(design, "Parsing global cfg");
     ConfigPart global_config_part;
     if (loaded_cfg && t.contains("global")) {
         global_config_part = parse_config(t.at("global"));
         global_cfg = assemble_config({global_config_part}, global_cfg);
     }
 
-    Yosys::log_header(design, "Parsing group cfgs");
     if (loaded_cfg) {
         for (auto &[table_name, table_value] : t.as_table()) {
             if (table_name == "global" || table_name == "module_groups") {
@@ -397,7 +395,6 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
 
 
 
-    Yosys::log_header(design, "Parsing group assignments");
     Yosys::dict<Yosys::RTLIL::IdString, std::vector<std::string>> group_assignments;
 
     if (loaded_cfg && t.contains("module_groups")) {
@@ -409,7 +406,6 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
         }
     }
 
-    Yosys::log_header(design, "Parsing module attrs cfg");
     for (auto module : design->modules()) {
 
         Yosys::RTLIL::IdString mod_name = module->name;
@@ -442,7 +438,6 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
 
     // TODO: add automatic top module detection
     // TODO: prevent overwriting of black box
-    Yosys::log_header(design, "Parsing specific module cfgs");
     if (loaded_cfg) {
         for (auto &[table_name, table_value] : t.as_table()) {
             if (table_name == "global" || table_name == "module_groups") {
@@ -461,7 +456,6 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
         }
     }
 
-    Yosys::log_header(design, "Parsing module cfgs");
     if (loaded_cfg) {
         for (auto &[table_name, table_value] : t.as_table()) {
             if (table_name == "global" || table_name == "module_groups") {
@@ -477,7 +471,6 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
         }
     }
 
-    Yosys::log_header(design, "Assembling final module cfgs");
     for (auto module : design->modules()) {
         if (!(module->has_attribute(ATTRIBUTE_IS_PROPER_SUBMODULE))) {
             continue;
@@ -485,8 +478,6 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
 
         Yosys::RTLIL::IdString specific_mod_name = module->name;
         Yosys::RTLIL::IdString mod_name = specific_mod_name.str().substr(0, specific_mod_name.str().find('$'));
-
-        Yosys::log("Assembling for %s| %s\n", specific_mod_name.c_str(), mod_name.c_str());
 
         std::vector<ConfigPart> cfg_parts = {global_config_part};
 

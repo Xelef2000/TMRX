@@ -312,7 +312,6 @@ insert_voter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, c
 }
 
 void connect_error_signal(RTLIL::Module *mod,const std::vector<RTLIL::Wire *> &error_signals) {
-    log_header(mod->design, "Connecting Error Signals\n");
 
     RTLIL::Wire *sink = nullptr;
     for (auto w : mod->wires()) {
