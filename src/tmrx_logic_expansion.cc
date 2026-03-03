@@ -527,6 +527,10 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr) {
         error_wires.insert(error_wires.end(), v_err_w.begin(), v_err_w.end());
     }
 
+    build_clk_net(mod, cfg_mgr);
+    build_rst_net(mod, cfg_mgr);
+
+
     if (cfg->preserve_module_ports || !cfg->expand_clock || !cfg->expand_reset) {
         auto v_err_w = insert_output_voters(mod, combined_output_map, cfg);
         error_wires.insert(error_wires.end(), v_err_w.begin(), v_err_w.end());
