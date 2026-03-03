@@ -4,7 +4,38 @@
 
 YOSYS_NAMESPACE_BEGIN
 namespace TMRX {
-namespace {}
+namespace {
+
+// Recursively clone and rename all proper submodule cells within `mod`,
+// appending `suffix` to their type names.  Creates new uniquified module
+// definitions in `design` as needed (skips creation if already present).
+void uniquify_submodules_recursive(RTLIL::Module *mod, const std::string &suffix,
+                                   RTLIL::Design *design) {
+    std::vector<RTLIL::Cell *> cells(mod->cells().begin(), mod->cells().end());
+
+    for (auto cell : cells) {
+        RTLIL::Module *cell_mod = design->module(cell->type);
+        if (cell_mod == nullptr || !is_proper_submodule(cell_mod)) {
+            continue;
+        }
+
+        RTLIL::IdString unique_name = RTLIL::IdString(cell->type.str() + suffix);
+
+        if (design->module(unique_name) == nullptr) {
+            RTLIL::Module *unique_mod = design->addModule(unique_name);
+            cell_mod->cloneInto(unique_mod);
+            unique_mod->name = unique_name;
+            unique_mod->set_bool_attribute(ID(tmrx_is_proper_submodule), true);
+
+            // Recurse so deeper submodule levels are also uniquified.
+            uniquify_submodules_recursive(unique_mod, suffix, design);
+        }
+
+        cell->type = unique_name;
+    }
+}
+
+} // namespace
 
 void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
     std::vector<RTLIL::Wire *> error_wires;
@@ -150,6 +181,32 @@ void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
     }
 
     connect_error_signal(wrapper, error_wires);
+
+    // Create one uniquified worker clone per TMR path and recursively uniquify
+    // all proper submodule cells within each clone so that the three workers
+    // are fully independent module hierarchies.
+    std::vector<std::string> path_suffixes = {
+        cfg->logic_path_1_suffix,
+        cfg->logic_path_2_suffix,
+        cfg->logic_path_3_suffix,
+    };
+
+    RTLIL::Design *design = mod->design;
+    for (size_t i = 0; i < 3; i++) {
+        RTLIL::IdString worker_name =
+            RTLIL::IdString(mod->name.str() + path_suffixes[i]);
+
+        RTLIL::Module *worker = design->addModule(worker_name);
+        mod->cloneInto(worker);
+        worker->name = worker_name;
+        worker->set_bool_attribute(ID(tmrx_is_proper_submodule), true);
+
+        uniquify_submodules_recursive(worker, path_suffixes[i], design);
+
+        duplicates[i]->type = worker_name;
+    }
+    // mod (the template worker) is left in the design but no longer referenced
+    // by any cell; opt_clean will remove it during subsequent optimization.
 }
 }
 

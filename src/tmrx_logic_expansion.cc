@@ -469,8 +469,9 @@ insert_duplicate_logic(RTLIL::Module *mod, std::vector<RTLIL::Wire *> wires,
 }
 
 }
-void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr) {
-    const Config *cfg = cfg_mgr->cfg(mod);
+void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr,
+                         const Config *cfg_override) {
+    const Config *cfg = cfg_override ? cfg_override : cfg_mgr->cfg(mod);
 
     std::vector<RTLIL::Wire *> original_wires(mod->wires().begin(), mod->wires().end());
     std::vector<RTLIL::Cell *> original_cells(mod->cells().begin(), mod->cells().end());
@@ -504,7 +505,21 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr) {
         if (!is_proper_submodule(cell_mod)) {
             continue;
         }
+
+        // Fetch cell_cfg from the ORIGINAL module before any type remapping,
+        // so preserve_module_ports and other settings are correct.
         const Config *cell_cfg = cfg_mgr->cfg(cell_mod);
+
+        // If this submodule was expanded with preserve_module_ports=false a
+        // _tmrx_impl copy was created with triplicated ports. Remap the cell
+        // to that impl so the parent's triplicated wires connect correctly.
+        if (cell_mod->has_attribute(ID(tmrx_impl_module))) {
+            RTLIL::IdString impl_name = RTLIL::IdString(
+                cell_mod->get_string_attribute(ID(tmrx_impl_module)));
+            cell->type = impl_name;
+            cell_mod = mod->design->module(impl_name);
+        }
+
         std::vector<RTLIL::Wire *> v_err_w;
 
         log_header(mod->design, "Connecting submodules\n");

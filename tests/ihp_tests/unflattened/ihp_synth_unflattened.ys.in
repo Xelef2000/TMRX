@@ -83,5 +83,5 @@ equiv_simple
 # equiv_induct -undef
 # equiv_status -assert
 
-equiv_induct -seq 5 -undef
+equiv_induct -seq 500 -undef
 equiv_status

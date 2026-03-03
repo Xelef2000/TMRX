@@ -7,7 +7,8 @@
 YOSYS_NAMESPACE_BEGIN
 namespace TMRX {
 
-void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr);
+void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr,
+                         const Config *cfg_override = nullptr);
 
 }
 YOSYS_NAMESPACE_END

@@ -78,19 +78,40 @@ struct TmrxPass : public Pass {
             log_pop();
             log_push();
 
-            if (cfg_mgr.cfg(worker)->tmr_mode == TmrMode::None) {
+            const Config *cfg = cfg_mgr.cfg(worker);
+
+            if (cfg->tmr_mode == TmrMode::None) {
                 continue;
             }
 
-            if (cfg_mgr.cfg(worker)->tmr_mode == TmrMode::LogicTMR) {
-                TMRX::logic_tmr_expansion(worker, &cfg_mgr);
+            // When preserve_module_ports=false and this is a proper submodule,
+            // clone the module before expansion. The clone is what gets expanded
+            // (triplicated ports etc.) while the original keeps its interface
+            // unchanged so that FullModuleTMR parents can connect to it without
+            // port mismatches. LogicTMR parents remap cell types to the clone
+            // via the tmrx_impl_module attribute.
+            RTLIL::Module *target = worker;
+            if (!cfg->preserve_module_ports && TMRX::is_proper_submodule(worker)) {
+                RTLIL::IdString impl_name =
+                    RTLIL::IdString(worker->name.str() + "_tmrx_impl");
+                target = design->addModule(impl_name);
+                worker->cloneInto(target);
+                target->name = impl_name;
+                target->set_bool_attribute(ID(tmrx_is_proper_submodule), true);
+                worker->set_string_attribute(ID(tmrx_impl_module), impl_name.str());
+                log("Cloned %s -> %s for TMR expansion\n",
+                    worker->name.c_str(), impl_name.c_str());
             }
 
-            if (cfg_mgr.cfg(worker)->tmr_mode == TmrMode::FullModuleTMR) {
-                TMRX::full_module_tmr_expansion(worker, cfg_mgr.cfg(worker));
+            if (cfg->tmr_mode == TmrMode::LogicTMR) {
+                TMRX::logic_tmr_expansion(target, &cfg_mgr, cfg);
             }
 
-            worker->fixup_ports();
+            if (cfg->tmr_mode == TmrMode::FullModuleTMR) {
+                TMRX::full_module_tmr_expansion(target, cfg);
+            }
+
+            target->fixup_ports();
         }
 
         log_pop();
