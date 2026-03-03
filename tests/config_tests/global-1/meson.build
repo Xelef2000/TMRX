@@ -16,10 +16,12 @@ test(
   yosys,
   args: [
     '-ql', 'config_test_global_1.log',
+    '-m', slang_plugin_path,
     '-m', plugin_path,
     '-s', 'config_test.ys',
     '-v', '10',
   ],
   timeout: 300,
   workdir: meson.current_build_dir(),
+  depends: [slang_build, tmrx],
 )

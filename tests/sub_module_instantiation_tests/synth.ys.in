@@ -1,5 +1,7 @@
 # synth.ys.in
-read_verilog @VERILOG_FILE@
+read_slang --top top @VERILOG_FILE@ \
+        --compat-mode --keep-hierarchy \
+        --allow-use-before-declare --ignore-unknown-modules
 hierarchy -check -top top
 
 proc; opt;
