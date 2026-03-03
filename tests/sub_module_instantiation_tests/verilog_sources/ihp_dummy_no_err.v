@@ -1,4 +1,4 @@
-module top (
+module top_impl (
     input  wire clk_i,
     input  wire rst_ni,
     input  wire in0_i,
@@ -60,4 +60,21 @@ module submodule (
 
     assign y_o = q | a_i;
 
+endmodule
+
+
+module top (
+    input  wire clk_i,
+    input  wire rst_ni,
+    input  wire in0_i,
+    input  wire in1_i,
+    output wire out_o
+);
+    top_impl u_top (
+        .clk_i(clk_i),
+        .rst_ni(rst_ni),
+        .in0_i(in0_i),
+        .in1_i(in1_i),
+        .out_o(out_o)
+    );
 endmodule
