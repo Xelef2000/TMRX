@@ -9,7 +9,13 @@ configure_file(input: 'tmrx_config.toml', output: 'tmrx_config.toml', copy: true
 test(
   'basic_counter',
   yosys,
-  args: ['-ql', 'counter.log', '-m', plugin_path, '-s', 'counter.ys'],
+  args: [
+    '-ql', 'counter.log',
+    '-m', slang_plugin_path,
+    '-m', plugin_path,
+    '-s', 'counter.ys',
+  ],
   timeout: 300,
   workdir: meson.current_build_dir(),
+  depends: [slang_build, tmrx],
 )

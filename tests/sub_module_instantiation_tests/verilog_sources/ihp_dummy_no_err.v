@@ -22,7 +22,7 @@ module top (
         .rst_ni(rst_ni),
         .a_i(in0_i),
         .b_i(sig_q),
-        .y_o(res_y),
+        .y_o(res_y)
     );
 
 
@@ -44,7 +44,7 @@ module submodule (
     input  wire rst_ni,
     input  wire a_i,
     input  wire b_i,
-    output wire y_o,
+    output wire y_o
 );
 
     reg q;

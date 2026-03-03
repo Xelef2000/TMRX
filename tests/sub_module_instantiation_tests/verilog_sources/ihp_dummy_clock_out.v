@@ -24,7 +24,7 @@ module top (
         .b_i(sig_q),
         .y_o(res_y),
         .clock_no(nclk),
-        // .err_o(err_o)
+        .err_o()
     );
 
 

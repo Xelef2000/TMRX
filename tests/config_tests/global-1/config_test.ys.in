@@ -1,4 +1,6 @@
-read_verilog top.v
+read_slang --top top top.v \
+        --compat-mode --keep-hierarchy \
+        --allow-use-before-declare --ignore-unknown-modules
 hierarchy -check -top top
 
 proc; opt; write_verilog -noattr 02_opt.v

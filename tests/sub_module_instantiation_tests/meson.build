@@ -66,12 +66,14 @@ foreach v_file : verilog_files
                     yosys,
                     args: [
                       '-ql', log_filename,
+                      '-m', slang_plugin_path,
                       '-m', plugin_path,
                       '-s', ys_filename,
                       '-v', '10',
                     ],
                     timeout: 300,
                     workdir: meson.current_build_dir(),
+                    depends: [slang_build, tmrx],
                   )
 
                 endforeach
