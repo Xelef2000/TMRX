@@ -393,12 +393,12 @@ insert_duplicate_logic(RTLIL::Module *mod, std::vector<RTLIL::Wire *> wires,
 
     for (auto w : wires) {
 
-        // log("Wire %s is clock: %i\n", w->name.c_str(), is_in_clk_net(w));
         // Skip duplication for clock/reset wires when not expanding them
         // This applies to BOTH input and output clock/reset ports
+        // Use is_clk_wire/is_rst_wire (same as rename_wires_and_cells) for consistency
         if ((cfg->preserve_module_ports && w->port_input) ||
-            (is_in_clk_net(w) && !cfg->expand_clock) ||
-            (is_in_rst_net(w) && !cfg->expand_reset)) {
+            (is_clk_wire(w, cfg) && !cfg->expand_clock) ||
+            (is_rst_wire(w, cfg) && !cfg->expand_reset)) {
             wire_map[w] = w;
             continue;
         }
