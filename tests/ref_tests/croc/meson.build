@@ -1,6 +1,6 @@
 croc_dir = meson.current_build_dir() / 'croc'
 
-croc_commit = '737c7d4459cf0ce8b77862f8b11e41731fa84594'
+croc_commit = '4ca88de5ce533c48bc2f1d77da57f5c8ff4859d1'
 croc_url = 'https://github.com/pulp-platform/croc.git'
 
 clone_croc = custom_target(

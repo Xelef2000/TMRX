@@ -249,9 +249,9 @@ std::vector<RTLIL::Wire *> connect_submodules_preserver_mod_ports(
 
         RTLIL::Wire *new_output = mod->addWire(NEW_ID, sig_a.size());
         cell->setPort(port, new_output);
-        mod->connect(new_output, sig_a);
-        mod->connect(new_output, sig_b);
-        mod->connect(new_output, sig_c);
+        mod->connect(sig_a, new_output);
+        mod->connect(sig_b, new_output);
+        mod->connect(sig_c, new_output);
     }
 
     return error_signals;
@@ -286,7 +286,7 @@ std::vector<RTLIL::Wire *> insert_voter_after_ff(RTLIL::Module *mod,
             for (size_t i = 0; i < 3; i++) {
                 std::pair<RTLIL::Wire *, RTLIL::Wire *> res_wires =
                     insert_voter(mod, intermediate_wires, cfg);
-                mod->connect(res_wires.first, original_signals.at(i));
+                mod->connect(original_signals.at(i), res_wires.first);
 
                 error_signals.push_back(res_wires.second);
             }
@@ -456,9 +456,11 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr,
     log("  Logic TMR: expanding '%s' (%zu wire(s), %zu cell(s))\n",
         mod->name.c_str(), original_wires.size(), original_cells.size());
 
+    log("  [1/6] Building clock/reset nets\n");
     build_clk_net(mod, cfg_mgr);
     build_rst_net(mod, cfg_mgr);
 
+    log("  [2/6] Duplicating logic (paths B and C)\n");
     auto [wiremap_b, outputmap_b, flipflopmap_b] = insert_duplicate_logic(
         mod, original_wires, original_cells, original_connections, cfg->logic_path_2_suffix, cfg);
     auto [wiremap_c, outputmap_c, flipflopmap_c] = insert_duplicate_logic(
@@ -467,7 +469,6 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr,
     build_clk_net(mod, cfg_mgr);
     build_rst_net(mod, cfg_mgr);
 
-
     dict<RTLIL::Wire *, std::pair<RTLIL::Wire *, RTLIL::Wire *>> combined_output_map =
         zip_dicts(outputmap_b, outputmap_c);
     dict<RTLIL::SigSpec, std::pair<RTLIL::SigSpec, RTLIL::SigSpec>> combined_wire_map =
@@ -475,6 +476,7 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr,
     dict<RTLIL::Cell *, std::pair<RTLIL::Cell *, RTLIL::Cell *>> combined_ff_map =
         zip_dicts(flipflopmap_b, flipflopmap_c);
 
+    log("  [3/6] Connecting submodule ports\n");
     for (auto cell : original_cells) {
         RTLIL::Module *cell_mod = mod->design->module(cell->type);
         if (!is_proper_submodule(cell_mod)) {
@@ -497,8 +499,9 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr,
 
         std::vector<RTLIL::Wire *> v_err_w;
 
-        log("  Connecting submodule '%s' (type '%s')\n",
-            cell->name.c_str(), cell->type.c_str());
+        log("    Connecting submodule '%s' (type '%s', preserve_ports=%s)\n",
+            cell->name.c_str(), cell->type.c_str(),
+            cell_cfg->preserve_module_ports ? "true" : "false");
         if (cell_cfg->preserve_module_ports) {
             v_err_w = connect_submodules_preserver_mod_ports(mod, cell, combined_wire_map, cfg);
         } else {
@@ -507,6 +510,7 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr,
         error_wires.insert(error_wires.end(), v_err_w.begin(), v_err_w.end());
     }
 
+    log("  [4/6] Renaming path-A wires/cells\n");
     rename_wires_and_cells(mod, original_wires, original_cells, cfg->logic_path_1_suffix, cfg);
 
     if (cfg->insert_voter_before_ff) {
@@ -514,7 +518,7 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr,
     }
 
     if (cfg->insert_voter_after_ff) {
-        log("  Inserting voters after %zu flip-flop(s)\n", combined_ff_map.size());
+        log("  [5/6] Inserting voters after %zu flip-flop(s)\n", combined_ff_map.size());
         auto v_err_w = insert_voter_after_ff(mod, combined_ff_map, cfg);
         error_wires.insert(error_wires.end(), v_err_w.begin(), v_err_w.end());
     }
@@ -522,7 +526,7 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr,
     build_clk_net(mod, cfg_mgr);
     build_rst_net(mod, cfg_mgr);
 
-
+    log("  [6/6] Inserting output voters / connecting error signal\n");
     if (cfg->preserve_module_ports || !cfg->expand_clock || !cfg->expand_reset) {
         auto v_err_w = insert_output_voters(mod, combined_output_map, cfg);
         error_wires.insert(error_wires.end(), v_err_w.begin(), v_err_w.end());

@@ -4,7 +4,7 @@
 tmr_mode = "LogicTMR"
 tmr_voter = "Default"
 tmr_voter_safe_mode = false
-preserve_module_ports = true
+preserve_module_ports = false
 insert_voter_before_ff = false
 insert_voter_after_ff = true
 tmr_mode_full_module_insert_voter_before_modules = true

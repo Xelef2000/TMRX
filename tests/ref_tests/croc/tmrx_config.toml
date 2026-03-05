@@ -17,3 +17,6 @@ excluded_ff_cells = ["FDSE"]
 logic_path_1_suffix = "_a"
 logic_path_2_suffix = "_b"
 logic_path_3_suffix = "_c"
+
+[module_tc_sram_impl]
+tmr_mode = "FullModuleTMR"

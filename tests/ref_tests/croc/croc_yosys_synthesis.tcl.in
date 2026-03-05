@@ -167,6 +167,7 @@ yosys hilomap -singleton -hicell {*}$tech_cell_tiehi -locell {*}$tech_cell_tielo
 
 yosys tmrx -c @TMRX_CONFIG@
 
+yosys check
 
 yosys dfflibmap {*}$tech_cells_args
 
