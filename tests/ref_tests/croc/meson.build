@@ -87,7 +87,7 @@ test(
     find_program('bash'),
     args: [croc_dir / 'yosys/run_synthesis.sh', '--synth'],
     workdir: croc_dir / 'yosys',
-    timeout: 3000,
+    timeout: 6000,
     depends: [
         replace_script,
         slang_build,

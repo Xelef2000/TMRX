@@ -348,7 +348,8 @@ void rename_wires_and_cells(RTLIL::Module *mod, std::vector<RTLIL::Wire *> wires
     }
 
     for (auto c : cells) {
-        if (is_proper_submodule(c->module->design->module(c->type))) {
+        RTLIL::Module *cell_mod = c->module->design->module(c->type);
+        if (is_proper_submodule(cell_mod) && !cell_mod->get_blackbox_attribute()) {
             continue;
         }
 
@@ -398,7 +399,8 @@ insert_duplicate_logic(RTLIL::Module *mod, std::vector<RTLIL::Wire *> wires,
     }
 
     for (auto c : cells) {
-        if (is_proper_submodule(c->module->design->module(c->type))) {
+        RTLIL::Module *cell_mod = c->module->design->module(c->type);
+        if (is_proper_submodule(cell_mod) && !cell_mod->get_blackbox_attribute()) {
             continue;
         }
 
@@ -479,7 +481,10 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr,
     log("  [3/6] Connecting submodule ports\n");
     for (auto cell : original_cells) {
         RTLIL::Module *cell_mod = mod->design->module(cell->type);
-        if (!is_proper_submodule(cell_mod)) {
+        // Blackbox cells (standard cells, liberty cells) are duplicated like
+        // primitive cells in insert_duplicate_logic; they must not be treated
+        // as proper submodules here or voters get inserted on every port.
+        if (!is_proper_submodule(cell_mod) || cell_mod->get_blackbox_attribute()) {
             continue;
         }
 
