@@ -490,7 +490,8 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr,
         // If this submodule was expanded with preserve_module_ports=false a
         // _tmrx_impl copy was created with triplicated ports. Remap the cell
         // to that impl so the parent's triplicated wires connect correctly.
-        if (cell_mod->has_attribute(ID(tmrx_impl_module))) {
+        bool was_expanded_with_triplicated_ports = cell_mod->has_attribute(ID(tmrx_impl_module));
+        if (was_expanded_with_triplicated_ports) {
             RTLIL::IdString impl_name = RTLIL::IdString(
                 cell_mod->get_string_attribute(ID(tmrx_impl_module)));
             cell->type = impl_name;
@@ -499,10 +500,18 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr,
 
         std::vector<RTLIL::Wire *> v_err_w;
 
-        log("    Connecting submodule '%s' (type '%s', preserve_ports=%s)\n",
+        // Use the voter-at-boundary path when:
+        // - preserve_module_ports=true (ports kept as-is), OR
+        // - the module was NOT expanded with triplicated ports (no _tmrx_impl):
+        //   this covers tmr_mode=None, blackboxes skipped by the main loop,
+        //   and any other case where ports were not triplicated.
+        bool use_preserve_path =
+            cell_cfg->preserve_module_ports || !was_expanded_with_triplicated_ports;
+        log("    Connecting submodule '%s' (type '%s', preserve_ports=%s, expanded=%s)\n",
             cell->name.c_str(), cell->type.c_str(),
-            cell_cfg->preserve_module_ports ? "true" : "false");
-        if (cell_cfg->preserve_module_ports) {
+            cell_cfg->preserve_module_ports ? "true" : "false",
+            was_expanded_with_triplicated_ports ? "true" : "false");
+        if (use_preserve_path) {
             v_err_w = connect_submodules_preserver_mod_ports(mod, cell, combined_wire_map, cfg);
         } else {
             v_err_w = connect_submodules_mod_ports(mod, cell, cell_cfg, cfg, combined_wire_map);

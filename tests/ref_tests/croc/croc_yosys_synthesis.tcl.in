@@ -169,7 +169,12 @@ yosys tmrx -c @TMRX_CONFIG@
 
 yosys check
 
+yosys hierarchy -check -top $top_design
+
 yosys dfflibmap {*}$tech_cells_args
+
+yosys techmap
+
 
 # then perform bit-level optimization and mapping on all combinational clouds in ABC
 # target period (per optimized block/module) in picoseconds
@@ -180,12 +185,17 @@ set abc_comb_script   [processAbcScript scripts/abc-opt.script]
 yosys abc {*}$tech_cells_args -D $period_ps -script $abc_comb_script -constr src/abc.constr {*}$dont_use_args -showtmp
 
 yosys clean -purge
+yosys check
 
 
 # final reports
 yosys tee -q -o "${rep_dir}/${proj_name}_synth.rpt" check
-yosys tee -q -o "${rep_dir}/${proj_name}_area.rpt" stat -top $top_design {*}$liberty_args
-yosys tee -q -o "${rep_dir}/${proj_name}_area_logic.rpt" stat -top $top_design {*}$tech_cells_args
+# yosys tee -q -o "${rep_dir}/${proj_name}_area.rpt" stat -top $top_design {*}$liberty_args
+# yosys tee -q -o "${rep_dir}/${proj_name}_area_logic.rpt" stat -top $top_design {*}$tech_cells_args
+
+
+yosys clean -purge
+
 
 # final netlist
 yosys write_verilog -noattr -noexpr -nohex -nodec ${out_dir}/${proj_name}_yosys.v

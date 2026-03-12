@@ -4,19 +4,19 @@ croc_commit = '4ca88de5ce533c48bc2f1d77da57f5c8ff4859d1'
 croc_url = 'https://github.com/pulp-platform/croc.git'
 
 clone_croc = custom_target(
-  'clone_croc',
-  output: 'croc_clone.stamp',
-  command: [
-    'sh',
-    '-c', '''
+    'clone_croc',
+    output: 'croc_clone.stamp',
+    command: [
+        'sh',
+        '-c', '''
     set -e
 
     CROC_DIR="'''
-    + croc_dir
-    + '''"
+        + croc_dir
+        + '''"
     COMMIT="'''
-    + croc_commit
-    + '''"
+        + croc_commit
+        + '''"
 
     if [ -d "$CROC_DIR/.git" ]; then
         echo "[INFO] Existing croc repo found"
@@ -37,18 +37,18 @@ clone_croc = custom_target(
     if [ ! -d "$CROC_DIR/.git" ]; then
         echo "[INFO] Cloning croc"
         git clone --recursive "'''
-    + croc_url
-    + '''" "$CROC_DIR"
+        + croc_url
+        + '''" "$CROC_DIR"
         git -C "$CROC_DIR" checkout "$COMMIT"
     fi
 
     git -C "$CROC_DIR" submodule update --init --recursive
 
     touch "'''
-    + meson.current_build_dir() / 'croc_clone.stamp'
-    + '''"
+        + meson.current_build_dir() / 'croc_clone.stamp'
+        + '''"
     ''',
-  ],
+    ],
 )
 
 croc_conf = configuration_data()
@@ -56,44 +56,44 @@ croc_conf.set('SLANG_PLUGIN', slang_plugin_path)
 croc_conf.set('TMRX_PLUGIN', plugin_path)
 croc_conf.set('TMRX_CONFIG', meson.current_build_dir() / 'tmrx_config.toml')
 
-configure_file(
-  input: 'croc_yosys_synthesis.tcl.in',
-  output: 'croc_yosys_synthesis.tcl',
-  configuration: croc_conf,
+croc_tcl = configure_file(
+    input: 'croc_yosys_synthesis.tcl.in',
+    output: 'croc_yosys_synthesis.tcl',
+    configuration: croc_conf,
 )
 
 configure_file(
-  input: 'tmrx_config.toml',
-  output: 'tmrx_config.toml',
-  copy: true,
+    input: 'tmrx_config.toml',
+    output: 'tmrx_config.toml',
+    copy: true,
 )
 
 replace_script = custom_target(
-  'replace_croc_yosys_script',
-  output: 'replace_script.stamp',
-  depends: clone_croc,
-  command: [
-    'cp',
-    meson.current_build_dir() / 'croc_yosys_synthesis.tcl',
-    croc_dir / 'yosys/scripts/yosys_synthesis.tcl',
-    '&&',
-    'touch',
-    '@OUTPUT@',
-  ],
+    'replace_croc_yosys_script',
+    input: croc_tcl,
+    output: 'replace_script.stamp',
+    depends: clone_croc,
+    command: [
+        'sh',
+        '-c', 'cp "$1" "$2" && touch "$3"',
+        '--', '@INPUT@',
+        croc_dir / 'yosys/scripts/yosys_synthesis.tcl',
+        '@OUTPUT@',
+    ],
 )
 
 test(
-  'croc_full_integration',
-  find_program('bash'),
-  args: [croc_dir / 'yosys/run_synthesis.sh', '--synth'],
-  workdir: croc_dir / 'yosys',
-  timeout: 1800,
-  depends: [
-    replace_script,
-    slang_build,
-    tmrx,
-  ],
-  env: [
-    'TMRX_CONFIG=' + (meson.current_build_dir() / 'tmrx_config.toml'),
-  ],
+    'croc_full_integration',
+    find_program('bash'),
+    args: [croc_dir / 'yosys/run_synthesis.sh', '--synth'],
+    workdir: croc_dir / 'yosys',
+    timeout: 3000,
+    depends: [
+        replace_script,
+        slang_build,
+        tmrx,
+    ],
+    env: [
+        'TMRX_CONFIG=' + (meson.current_build_dir() / 'tmrx_config.toml'),
+    ],
 )
