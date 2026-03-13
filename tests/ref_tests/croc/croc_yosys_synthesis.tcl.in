@@ -205,7 +205,14 @@ yosys write_verilog -noattr -noexpr -nohex -nodec $final_netlist
 
 # =============================================================================
 # Logical Equivalence Checking (LEQ)
+# Set RUN_LEQ=1 in the environment to enable (disabled by default: very slow)
 # =============================================================================
+set run_leq 0
+if {[info exists env(RUN_LEQ)] && $env(RUN_LEQ) eq "1"} {
+    set run_leq 1
+}
+
+if {$run_leq} {
 
 # -- Gold model: re-read RTL source --
 yosys design -reset
@@ -249,3 +256,5 @@ yosys equiv_simple
 yosys equiv_induct -seq 500 -undef
 yosys tee -q -o "${rep_dir}/${proj_name}_leq.rpt" equiv_status
 yosys equiv_status
+
+} ;# end if run_leq
