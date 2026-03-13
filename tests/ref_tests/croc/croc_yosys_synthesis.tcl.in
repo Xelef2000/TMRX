@@ -167,8 +167,14 @@ yosys hilomap -singleton -hicell {*}$tech_cell_tiehi -locell {*}$tech_cell_tielo
 
 yosys tmrx -c @TMRX_CONFIG@
 
+yosys check
+
+yosys hierarchy -check -top $top_design
 
 yosys dfflibmap {*}$tech_cells_args
+
+yosys techmap
+
 
 # then perform bit-level optimization and mapping on all combinational clouds in ABC
 # target period (per optimized block/module) in picoseconds
@@ -179,6 +185,7 @@ set abc_comb_script   [processAbcScript scripts/abc-opt.script]
 yosys abc {*}$tech_cells_args -D $period_ps -script $abc_comb_script -constr src/abc.constr {*}$dont_use_args -showtmp
 
 yosys clean -purge
+yosys check
 
 
 # final reports
@@ -186,5 +193,68 @@ yosys tee -q -o "${rep_dir}/${proj_name}_synth.rpt" check
 yosys tee -q -o "${rep_dir}/${proj_name}_area.rpt" stat -top $top_design {*}$liberty_args
 yosys tee -q -o "${rep_dir}/${proj_name}_area_logic.rpt" stat -top $top_design {*}$tech_cells_args
 
+
+yosys clean -purge
+
+
 # final netlist
-yosys write_verilog -noattr -noexpr -nohex -nodec ${out_dir}/${proj_name}_yosys.v
+set final_netlist "${out_dir}/${proj_name}_yosys.v"
+yosys write_json ${out_dir}/${proj_name}_netlist.json
+yosys write_verilog -noattr -noexpr -nohex -nodec $final_netlist
+
+
+# =============================================================================
+# Logical Equivalence Checking (LEQ)
+# Set RUN_LEQ=1 in the environment to enable (disabled by default: very slow)
+# =============================================================================
+set run_leq 0
+if {[info exists env(RUN_LEQ)] && $env(RUN_LEQ) eq "1"} {
+    set run_leq 1
+}
+
+if {$run_leq} {
+
+# -- Gold model: re-read RTL source --
+yosys design -reset
+# $liberty_args uses "-liberty file" syntax for abc/dfflibmap; read_liberty
+# takes files directly, so loop over pairs to extract the file paths.
+foreach {_ file} $liberty_args {
+    yosys read_liberty -lib -ignore_miss_func $file
+}
+yosys read_slang --top $top_design -f $sv_flist \
+        --compat-mode --keep-hierarchy \
+        --allow-use-before-declare --ignore-unknown-modules
+yosys prep -top $top_design
+yosys flatten
+yosys clean
+yosys design -stash gold
+
+# -- Gate model: read back synthesized netlist --
+yosys design -reset
+foreach {_ file} $liberty_args {
+    yosys read_liberty -lib -ignore_miss_func $file
+}
+yosys read_verilog $final_netlist
+yosys prep -top $top_design
+yosys flatten
+yosys clean
+yosys design -stash gate
+
+# -- Equivalence check --
+yosys design -reset
+# Reload liberty so tie/std cells referenced in the gate netlist are known
+foreach {_ file} $liberty_args {
+    yosys read_liberty -lib -ignore_miss_func $file
+}
+yosys design -copy-from gold -as gold_top $top_design
+yosys design -copy-from gate -as synth_top $top_design
+yosys async2sync gold_top
+yosys async2sync synth_top
+yosys equiv_make gold_top synth_top equiv
+yosys prep -top equiv
+yosys equiv_simple
+yosys equiv_induct -seq 500 -undef
+yosys tee -q -o "${rep_dir}/${proj_name}_leq.rpt" equiv_status
+yosys equiv_status
+
+} ;# end if run_leq

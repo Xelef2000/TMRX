@@ -18,6 +18,14 @@ void uniquify_submodules_recursive(RTLIL::Module *mod, const std::string &suffix
         if (cell_mod == nullptr || !is_proper_submodule(cell_mod)) {
             continue;
         }
+        // Blackbox modules (standard cells, user IP blackboxes) are
+        // independent per-instance by definition — multiple workers can share
+        // the same blackbox type without needing uniquified copies.
+        // Cloning them also risks breaking port connections when the original
+        // was already processed by full_module_tmr_expansion.
+        if (cell_mod->get_blackbox_attribute()) {
+            continue;
+        }
 
         RTLIL::IdString unique_name = RTLIL::IdString(cell->type.str() + suffix);
 
@@ -26,6 +34,11 @@ void uniquify_submodules_recursive(RTLIL::Module *mod, const std::string &suffix
             cell_mod->cloneInto(unique_mod);
             unique_mod->name = unique_name;
             unique_mod->set_bool_attribute(ID(tmrx_is_proper_submodule), true);
+            // cloneInto copies all attributes, including tmrx_impl_module if
+            // the source was processed by TMRX. The clone is an independent
+            // worker module — it must not carry tmrx_impl_module or the
+            // cleanup loop in tmrx_pass will remove it from the design.
+            unique_mod->attributes.erase(ID(tmrx_impl_module));
 
             // Recurse so deeper submodule levels are also uniquified.
             uniquify_submodules_recursive(unique_mod, suffix, design);
@@ -206,8 +219,13 @@ void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
 
         duplicates[i]->type = worker_name;
     }
-    // mod (the template worker) is left in the design but no longer referenced
-    // by any cell; opt_clean will remove it during subsequent optimization.
+    // mod (the template worker) is no longer referenced by any cell.
+    // Remove it immediately: the _a/_b/_c workers hold the complete
+    // implementation, so the template is redundant. Leaving it in the design
+    // as an unreachable orphan causes `stat -top` to crash because stat
+    // iterates design->selected_modules() but only builds mod_stat for
+    // modules reachable from the top (std::out_of_range on missing keys).
+    design->remove(mod);
 }
 }
 

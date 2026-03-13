@@ -65,6 +65,12 @@ struct TmrxPass : public Pass {
             if (!worker)
                 continue;
 
+            // Blackbox modules (standard cells, IP blackboxes) that appear as
+            // edge-only nodes in the topo sort must not be expanded. They were
+            // intentionally excluded from the node-building loop above.
+            if (worker->get_blackbox_attribute())
+                continue;
+
             const Config *cfg = cfg_mgr.cfg(worker);
 
             if (cfg->tmr_mode == TmrMode::None) {
@@ -95,13 +101,34 @@ struct TmrxPass : public Pass {
 
             if (cfg->tmr_mode == TmrMode::LogicTMR) {
                 TMRX::logic_tmr_expansion(target, &cfg_mgr, cfg);
+                target->fixup_ports();
             }
 
             if (cfg->tmr_mode == TmrMode::FullModuleTMR) {
+                // full_module_tmr_expansion removes `target` (the _tmrx_worker
+                // template) from the design at the end, so `target` is a
+                // dangling pointer after the call. The wrapper module created
+                // inside already calls fixup_ports() before that point.
                 TMRX::full_module_tmr_expansion(target, cfg);
             }
+        }
 
-            target->fixup_ports();
+        // Remove original modules that were cloned to _tmrx_impl. By this
+        // point all parent modules have had their cells remapped to the
+        // _tmrx_impl variant, so the originals are unreferenced. Leaving them
+        // in the design causes `stat -top` to crash because stat iterates
+        // design->selected_modules() but only builds mod_stat for modules
+        // reachable from the top (std::out_of_range on missing keys).
+        std::vector<RTLIL::IdString> to_remove;
+        for (auto module : design->modules()) {
+            if (module->has_attribute(ID(tmrx_impl_module))) {
+                to_remove.push_back(module->name);
+            }
+        }
+        for (auto name : to_remove) {
+            log("Removing original module '%s' (replaced by _tmrx_impl clone)\n",
+                name.c_str());
+            design->remove(design->module(name));
         }
 
         log_pop();

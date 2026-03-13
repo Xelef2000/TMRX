@@ -494,6 +494,23 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
         final_module_cfgs[specific_mod_name] = assemble_config(cfg_parts, global_cfg);
     }
 
+    // Also assemble configs for non-submodule modules (e.g., the top-level chip).
+    // These have no '$' in their name, so mod_name == specific_mod_name.
+    for (auto module : design->modules()) {
+        if (module->has_attribute(ATTRIBUTE_IS_PROPER_SUBMODULE)) {
+            continue;
+        }
+
+        Yosys::RTLIL::IdString mod_name = module->name;
+
+        std::vector<ConfigPart> cfg_parts = {global_config_part};
+        append_group_configs(cfg_parts, group_assignments, mod_name, mod_name);
+        append_config_if_present(cfg_parts, module_cfgs, mod_name);
+        append_config_if_present(cfg_parts, module_attr_cfgs, mod_name);
+
+        final_module_cfgs[mod_name] = assemble_config(cfg_parts, global_cfg);
+    }
+
 
 }
 
