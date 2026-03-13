@@ -34,6 +34,11 @@ void uniquify_submodules_recursive(RTLIL::Module *mod, const std::string &suffix
             cell_mod->cloneInto(unique_mod);
             unique_mod->name = unique_name;
             unique_mod->set_bool_attribute(ID(tmrx_is_proper_submodule), true);
+            // cloneInto copies all attributes, including tmrx_impl_module if
+            // the source was processed by TMRX. The clone is an independent
+            // worker module — it must not carry tmrx_impl_module or the
+            // cleanup loop in tmrx_pass will remove it from the design.
+            unique_mod->attributes.erase(ID(tmrx_impl_module));
 
             // Recurse so deeper submodule levels are also uniquified.
             uniquify_submodules_recursive(unique_mod, suffix, design);
