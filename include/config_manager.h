@@ -25,6 +25,8 @@ const std::string cfg_tmr_mode_full_module_insert_voter_before_modules_attr_name
     "\\tmrx_tmr_mode_full_module_insert_voter_before_modules";
 const std::string cfg_tmr_mode_full_module_insert_voter_after_modules_attr_name =
     "\\tmrx_tmr_mode_full_module_insert_voter_after_modules";
+const std::string cfg_tmr_voter_file_attr_name = "\\tmrx_tmr_voter_file";
+const std::string cfg_tmr_voter_module_attr_name = "\\tmrx_tmr_voter_module";
 const std::string cfg_tmr_mode_full_module_insert_voter_on_clock_nets_attr_name =
         "\\tmrx_tmr_mode_full_module_insert_voter_on_clock_nets";
 const std::string cfg_tmr_mode_full_module_insert_voter_on_reset_nets_attr_name =
@@ -48,7 +50,7 @@ enum class TmrMode {
     LogicTMR,
 };
 
-enum class TmrVoter { Default };
+enum class TmrVoter { Default, Custom };
 
 // String conversion helpers
 std::optional<TmrMode> parse_tmr_mode(const std::string &str);
@@ -75,8 +77,9 @@ struct Config {
 
     TmrMode tmr_mode;
 
-
     TmrVoter tmr_voter;
+    std::string tmr_voter_file;
+    std::string tmr_voter_module;
 
     bool tmr_voter_safe_mode;
 
@@ -111,6 +114,8 @@ struct ConfigPart {
     std::optional<TmrMode> tmr_mode;
 
     std::optional<TmrVoter> tmr_voter;
+    std::optional<std::string> tmr_voter_file;
+    std::optional<std::string> tmr_voter_module;
     std::optional<bool> tmr_voter_safe_mode;
 
     std::optional<bool> preserve_module_ports;
@@ -142,6 +147,7 @@ struct ConfigManager {
   private:
     void load_global_default_cfg();
     void load_default_groups_cfg();
+    void load_custom_voters(Yosys::RTLIL::Design *design);
     void validate_cfg(Yosys::RTLIL::Design *design);
 
     // Attribute parsing helpers
