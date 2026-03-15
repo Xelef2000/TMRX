@@ -124,6 +124,7 @@ void ConfigManager::load_global_default_cfg() {
     global_cfg.tmr_mode_full_module_insert_voter_before_modules = false;
     global_cfg.tmr_mode_full_module_insert_voter_after_modules = true;
     global_cfg.tmr_mode_full_module_insert_voter_on_clock_nets = false;
+    global_cfg.tmr_mode_full_module_insert_voter_on_reset_nets = false;
 
     global_cfg.clock_port_names = {Yosys::RTLIL::IdString("\\clk_i")};
     global_cfg.reset_port_names = {Yosys::RTLIL::IdString("\\rst_ni")};
@@ -232,6 +233,8 @@ ConfigPart ConfigManager::parse_config(const toml::value &t) {
         toml_find_optional<bool>(t, "tmr_mode_full_module_insert_voter_after_modules");
     cfg.tmr_mode_full_module_insert_voter_on_clock_nets =
         toml_find_optional<bool>(t, "tmr_mode_full_module_insert_voter_on_clock_nets");
+    cfg.tmr_mode_full_module_insert_voter_on_reset_nets =
+        toml_find_optional<bool>(t, "tmr_mode_full_module_insert_voter_on_reset_nets");
     cfg.expand_clock = toml_find_optional<bool>(t, "expand_clock");
     cfg.expand_reset = toml_find_optional<bool>(t, "expand_reset");
 
@@ -280,6 +283,8 @@ ConfigPart ConfigManager::parse_module_annotations(const Yosys::RTLIL::Module *m
         get_bool_attr_value(mod, cfg_tmr_mode_full_module_insert_voter_after_modules_attr_name);
     cfg.tmr_mode_full_module_insert_voter_on_clock_nets =
         get_bool_attr_value(mod, cfg_tmr_mode_full_module_insert_voter_on_clock_nets_attr_name);
+    cfg.tmr_mode_full_module_insert_voter_on_reset_nets =
+        get_bool_attr_value(mod, cfg_tmr_mode_full_module_insert_voter_on_reset_nets_attr_name);
     cfg.expand_clock = get_bool_attr_value(mod, cfg_expand_clock_attr_name);
     cfg.expand_reset = get_bool_attr_value(mod, cfg_expand_rst_attr_name);
 
@@ -310,6 +315,8 @@ Config ConfigManager::assemble_config(std::vector<ConfigPart> parts, Config def)
                          part.tmr_mode_full_module_insert_voter_after_modules);
         apply_if_present(cfg.tmr_mode_full_module_insert_voter_on_clock_nets,
                          part.tmr_mode_full_module_insert_voter_on_clock_nets);
+        apply_if_present(cfg.tmr_mode_full_module_insert_voter_on_reset_nets,
+                         part.tmr_mode_full_module_insert_voter_on_reset_nets);
         apply_if_present(cfg.clock_port_names, part.clock_port_names);
         apply_if_present(cfg.expand_clock, part.expand_clock);
         apply_if_present(cfg.reset_port_names, part.reset_port_names);
@@ -349,6 +356,143 @@ void ConfigManager::append_config_if_present(
 
     if (cfg_map.count(key) != 0) {
         cfg_parts.push_back(cfg_map.at(key));
+    }
+}
+
+void ConfigManager::validate_cfg(Yosys::RTLIL::Design *design) {
+    bool any_expand_clock = false;
+    bool any_expand_reset = false;
+
+    for (auto module : design->modules()) {
+        // Re-read after potential overrides from earlier iterations.
+        Config &c = final_module_cfgs.count(module->name)
+                        ? final_module_cfgs.at(module->name)
+                        : global_cfg;
+        const char *mod = module->name.c_str();
+        bool is_blackbox = module->get_blackbox_attribute() ||
+                           module->has_memories() || module->has_processes();
+
+        // Check 1: blackbox modules may only use None or FullModuleTMR.
+        if (is_blackbox && c.tmr_mode == TmrMode::LogicTMR) {
+            Yosys::log_warning(
+                "Module '%s' has the blackbox attribute but tmr_mode is LogicTMR. "
+                "LogicTMR is not supported for black-box modules. "
+                "Overriding tmr_mode to FullModuleTMR.\n", mod);
+            c.tmr_mode = TmrMode::FullModuleTMR;
+        }
+
+        // Check 2: tmr_mode None requires preserve_module_ports.
+        if (c.tmr_mode == TmrMode::None && !c.preserve_module_ports) {
+            Yosys::log_warning(
+                "Module '%s' has tmr_mode None but preserve_module_ports is false. "
+                "Ports must be preserved when TMR is disabled. "
+                "Overriding preserve_module_ports to true.\n", mod);
+            c.preserve_module_ports = true;
+        }
+
+        // Check 3: preserve_module_ports with expanded clock or reset can insert voters on those nets.
+        if (c.preserve_module_ports && (c.expand_clock || c.expand_reset)) {
+            if (c.expand_clock) {
+                Yosys::log_warning(
+                    "Module '%s' has preserve_module_ports enabled together with expand_clock. "
+                    "This may cause voters to be inserted on the clock net.\n", mod);
+            }
+            if (c.expand_reset) {
+                Yosys::log_warning(
+                    "Module '%s' has preserve_module_ports enabled together with expand_reset. "
+                    "This may cause voters to be inserted on the reset net.\n", mod);
+            }
+        }
+
+        // Check 5: insert_voter_before_ff is not implemented — catch early.
+        if (c.insert_voter_before_ff) {
+            Yosys::log_error(
+                "Module '%s': insert_voter_before_ff is not yet implemented.\n", mod);
+        }
+
+        // Check 6: duplicate path suffixes cause wire name collisions.
+        if (c.logic_path_1_suffix == c.logic_path_2_suffix ||
+            c.logic_path_1_suffix == c.logic_path_3_suffix ||
+            c.logic_path_2_suffix == c.logic_path_3_suffix) {
+            Yosys::log_error(
+                "Module '%s': logic path suffixes must be unique "
+                "(got '%s', '%s', '%s').\n",
+                mod, c.logic_path_1_suffix.c_str(),
+                c.logic_path_2_suffix.c_str(),
+                c.logic_path_3_suffix.c_str());
+        }
+
+        // Check 7: FullModuleTMR-only options are no-ops in LogicTMR / None mode.
+        if (c.tmr_mode != TmrMode::FullModuleTMR) {
+            if (c.tmr_mode_full_module_insert_voter_before_modules)
+                Yosys::log_warning(
+                    "Module '%s': tmr_mode_full_module_insert_voter_before_modules has no effect "
+                    "outside of FullModuleTMR mode.\n", mod);
+            if (c.tmr_mode_full_module_insert_voter_after_modules)
+                Yosys::log_warning(
+                    "Module '%s': tmr_mode_full_module_insert_voter_after_modules has no effect "
+                    "outside of FullModuleTMR mode.\n", mod);
+            if (c.tmr_mode_full_module_insert_voter_on_clock_nets)
+                Yosys::log_warning(
+                    "Module '%s': tmr_mode_full_module_insert_voter_on_clock_nets has no effect "
+                    "outside of FullModuleTMR mode.\n", mod);
+            if (c.tmr_mode_full_module_insert_voter_on_reset_nets)
+                Yosys::log_warning(
+                    "Module '%s': tmr_mode_full_module_insert_voter_on_reset_nets has no effect "
+                    "outside of FullModuleTMR mode.\n", mod);
+        }
+
+        // Check 8: LogicTMR-only options are no-ops in FullModuleTMR mode.
+        if (c.tmr_mode == TmrMode::FullModuleTMR) {
+            if (c.insert_voter_after_ff)
+                Yosys::log_warning(
+                    "Module '%s': insert_voter_after_ff has no effect in FullModuleTMR mode.\n",
+                    mod);
+            if (!c.ff_cells.empty() || !c.additional_ff_cells.empty() ||
+                !c.excluded_ff_cells.empty())
+                Yosys::log_warning(
+                    "Module '%s': ff_cells / additional_ff_cells / excluded_ff_cells have no "
+                    "effect in FullModuleTMR mode.\n", mod);
+        }
+
+        // Check 9: voter_on_clock/reset_nets is a no-op when the net is not expanded.
+        if (c.tmr_mode == TmrMode::FullModuleTMR) {
+            if (c.tmr_mode_full_module_insert_voter_on_clock_nets && !c.expand_clock)
+                Yosys::log_warning(
+                    "Module '%s': tmr_mode_full_module_insert_voter_on_clock_nets is true but "
+                    "expand_clock is false — the flag has no effect.\n", mod);
+            if (c.tmr_mode_full_module_insert_voter_on_reset_nets && !c.expand_reset)
+                Yosys::log_warning(
+                    "Module '%s': tmr_mode_full_module_insert_voter_on_reset_nets is true but "
+                    "expand_reset is false — the flag has no effect.\n", mod);
+
+            // Check 10: both flags set — voters WILL be placed on the clock/reset net.
+            if (c.tmr_mode_full_module_insert_voter_on_clock_nets && c.expand_clock)
+                Yosys::log_warning(
+                    "Module '%s': tmr_mode_full_module_insert_voter_on_clock_nets and "
+                    "expand_clock are both enabled. Voters will be inserted on the clock net.\n",
+                    mod);
+            if (c.tmr_mode_full_module_insert_voter_on_reset_nets && c.expand_reset)
+                Yosys::log_warning(
+                    "Module '%s': tmr_mode_full_module_insert_voter_on_reset_nets and "
+                    "expand_reset are both enabled. Voters will be inserted on the reset net.\n",
+                    mod);
+        }
+
+        if (c.expand_clock) any_expand_clock = true;
+        if (c.expand_reset) any_expand_reset = true;
+    }
+
+    // Check 4: any expand_clock/reset in the design can place voters on those nets.
+    if (any_expand_clock) {
+        Yosys::log_warning(
+            "One or more modules have expand_clock enabled. "
+            "This may cause voters to be placed on clock nets.\n");
+    }
+    if (any_expand_reset) {
+        Yosys::log_warning(
+            "One or more modules have expand_reset enabled. "
+            "This may cause voters to be placed on reset nets.\n");
     }
 }
 
@@ -511,7 +655,7 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
         final_module_cfgs[mod_name] = assemble_config(cfg_parts, global_cfg);
     }
 
-
+    validate_cfg(design);
 }
 
 const Config *ConfigManager::cfg(Yosys::RTLIL::Module *mod) const {
@@ -538,6 +682,8 @@ std::string ConfigManager::cfg_as_string(Yosys::RTLIL::Module *mod) const {
            bool_to_string(c->tmr_mode_full_module_insert_voter_after_modules) + "\n";
     ret += "Tmr Mode full; insert voter on clock nets: " +
            bool_to_string(c->tmr_mode_full_module_insert_voter_on_clock_nets) + "\n";
+    ret += "Tmr Mode full; insert voter on reset nets: " +
+           bool_to_string(c->tmr_mode_full_module_insert_voter_on_reset_nets) + "\n";
     ret += "Clock port names: " + pool_to_string(c->clock_port_names) + "\n";
     ret += "Expand Clock net: " + bool_to_string(c->expand_clock) + "\n";
     ret += "Reset port names: " + pool_to_string(c->reset_port_names) + "\n";
