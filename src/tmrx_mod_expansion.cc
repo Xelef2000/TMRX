@@ -121,7 +121,9 @@ void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
     if (cfg->tmr_mode_full_module_insert_voter_before_modules && !cfg->preserve_module_ports) {
         for (auto wm : wire_map) {
             if (!wm.first->port_input || (is_clk_wire(wm.first, cfg) && !cfg->expand_clock) ||
-                (is_rst_wire(wm.first, cfg) && !cfg->expand_reset)|| (is_clk_wire(wm.first,cfg) && !cfg->tmr_mode_full_module_insert_voter_on_clock_nets )) {
+                (is_rst_wire(wm.first, cfg) && !cfg->expand_reset) ||
+                (is_clk_wire(wm.first, cfg) && !cfg->tmr_mode_full_module_insert_voter_on_clock_nets) ||
+                (is_rst_wire(wm.first, cfg) && !cfg->tmr_mode_full_module_insert_voter_on_reset_nets)) {
                 continue;
             }
 
@@ -142,7 +144,9 @@ void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
         for (auto wm : wire_map) {
             if (!wm.first->port_output || is_tmr_error_out_wire(wm.first) ||
                 (is_clk_wire(wm.first, cfg) && !cfg->expand_clock) ||
-                (is_rst_wire(wm.first, cfg) && !cfg->expand_reset) || (is_clk_wire(wm.first,cfg) && !cfg->tmr_mode_full_module_insert_voter_on_clock_nets )) {
+                (is_rst_wire(wm.first, cfg) && !cfg->expand_reset) ||
+                (is_clk_wire(wm.first, cfg) && !cfg->tmr_mode_full_module_insert_voter_on_clock_nets) ||
+                (is_rst_wire(wm.first, cfg) && !cfg->tmr_mode_full_module_insert_voter_on_reset_nets)) {
                 continue;
             }
 

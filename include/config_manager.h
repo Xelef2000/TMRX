@@ -27,6 +27,8 @@ const std::string cfg_tmr_mode_full_module_insert_voter_after_modules_attr_name 
     "\\tmrx_tmr_mode_full_module_insert_voter_after_modules";
 const std::string cfg_tmr_mode_full_module_insert_voter_on_clock_nets_attr_name =
         "\\tmrx_tmr_mode_full_module_insert_voter_on_clock_nets";
+const std::string cfg_tmr_mode_full_module_insert_voter_on_reset_nets_attr_name =
+        "\\tmrx_tmr_mode_full_module_insert_voter_on_reset_nets";
 const std::string cfg_tmr_preserve_module_ports_attr_name = "\\tmrx_tmr_preserve_module_ports";
 const std::string cfg_insert_voter_before_ff_attr_name = "\\tmrx_insert_voter_before_ff";
 const std::string cfg_insert_voter_after_ff_attr_name = "\\tmrx_insert_voter_after_ff";
@@ -86,6 +88,7 @@ struct Config {
     bool tmr_mode_full_module_insert_voter_before_modules;
     bool tmr_mode_full_module_insert_voter_after_modules;
     bool tmr_mode_full_module_insert_voter_on_clock_nets;
+    bool tmr_mode_full_module_insert_voter_on_reset_nets;
 
     Yosys::pool<Yosys::RTLIL::IdString> clock_port_names;
     bool expand_clock;
@@ -118,6 +121,7 @@ struct ConfigPart {
     std::optional<bool> tmr_mode_full_module_insert_voter_before_modules;
     std::optional<bool> tmr_mode_full_module_insert_voter_after_modules;
     std::optional<bool> tmr_mode_full_module_insert_voter_on_clock_nets;
+    std::optional<bool> tmr_mode_full_module_insert_voter_on_reset_nets;
 
     std::optional<Yosys::pool<Yosys::RTLIL::IdString>> clock_port_names;
     std::optional<bool> expand_clock;
@@ -138,7 +142,7 @@ struct ConfigManager {
   private:
     void load_global_default_cfg();
     void load_default_groups_cfg();
-    void validate_cfg();
+    void validate_cfg(Yosys::RTLIL::Design *design);
 
     // Attribute parsing helpers
     std::string get_string_attr_value_or(const Yosys::RTLIL::Module *mod, const std::string &attr,
