@@ -1,8 +1,10 @@
 [global]
 tmr_mode = "LogicTMR"
 tmr_voter = "Custom"
-tmr_voter_file = "simple_voter.v"
-tmr_voter_module = "simple_voter"
+tmr_voter_file = "stateful_voter.v"
+tmr_voter_module = "stateful_voter"
+tmr_voter_clock_port_name = "clk_i"
+tmr_voter_reset_port_name = "rst_ni"
 tmr_voter_safe_mode = false
 preserve_module_ports = true
 insert_voter_before_ff = false

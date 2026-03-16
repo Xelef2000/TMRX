@@ -302,6 +302,90 @@ insert_voter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, c
     RTLIL::SigSpec output_bits;
     RTLIL::SigSpec error_bits;
 
+    // Resolve the voter's clock and reset port names.
+    // Config option takes priority over the tmrx_clk_port / tmrx_rst_port Verilog attribute.
+    RTLIL::Module *voter_mod_ptr = design->module(voter_1bit);
+    RTLIL::IdString voter_clk_port;
+    RTLIL::IdString voter_rst_port;
+
+    if (voter_mod_ptr) {
+        if (!cfg->tmr_voter_clock_port_name.empty()) {
+            voter_clk_port = RTLIL::IdString("\\" + cfg->tmr_voter_clock_port_name);
+        } else {
+            for (auto port_id : voter_mod_ptr->ports) {
+                RTLIL::Wire *pw = voter_mod_ptr->wire(port_id);
+                if (pw && pw->port_input && pw->has_attribute(ID(tmrx_clk_port))) {
+                    voter_clk_port = port_id;
+                    break;
+                }
+            }
+        }
+
+        if (!cfg->tmr_voter_reset_port_name.empty()) {
+            voter_rst_port = RTLIL::IdString("\\" + cfg->tmr_voter_reset_port_name);
+        } else {
+            for (auto port_id : voter_mod_ptr->ports) {
+                RTLIL::Wire *pw = voter_mod_ptr->wire(port_id);
+                if (pw && pw->port_input && pw->has_attribute(ID(tmrx_rst_port))) {
+                    voter_rst_port = port_id;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Find the parent wire to drive the voter's clock / reset port.
+    // If tmr_voter_clock_net / tmr_voter_reset_net is set, use that specific wire;
+    // otherwise fall back to the first input wire recognised as a clock / reset port.
+    RTLIL::Wire *parent_clk_wire = nullptr;
+    RTLIL::Wire *parent_rst_wire = nullptr;
+
+    if (!voter_clk_port.empty()) {
+        if (!cfg->tmr_voter_clock_net.empty()) {
+            parent_clk_wire = module->wire("\\" + cfg->tmr_voter_clock_net);
+            if (!parent_clk_wire)
+                log_warning("Custom voter '%s': tmr_voter_clock_net '%s' not found in "
+                            "parent module '%s'.\n",
+                            voter_1bit.c_str(), cfg->tmr_voter_clock_net.c_str(),
+                            module->name.c_str());
+        } else {
+            for (auto wire : module->wires()) {
+                if (wire->port_input && is_clk_wire(wire, cfg)) {
+                    parent_clk_wire = wire;
+                    break;
+                }
+            }
+            if (!parent_clk_wire)
+                log_warning("Custom voter '%s': clock port '%s' specified but no clock "
+                            "wire found in parent module '%s'.\n",
+                            voter_1bit.c_str(), voter_clk_port.c_str(),
+                            module->name.c_str());
+        }
+    }
+
+    if (!voter_rst_port.empty()) {
+        if (!cfg->tmr_voter_reset_net.empty()) {
+            parent_rst_wire = module->wire("\\" + cfg->tmr_voter_reset_net);
+            if (!parent_rst_wire)
+                log_warning("Custom voter '%s': tmr_voter_reset_net '%s' not found in "
+                            "parent module '%s'.\n",
+                            voter_1bit.c_str(), cfg->tmr_voter_reset_net.c_str(),
+                            module->name.c_str());
+        } else {
+            for (auto wire : module->wires()) {
+                if (wire->port_input && is_rst_wire(wire, cfg)) {
+                    parent_rst_wire = wire;
+                    break;
+                }
+            }
+            if (!parent_rst_wire)
+                log_warning("Custom voter '%s': reset port '%s' specified but no reset "
+                            "wire found in parent module '%s'.\n",
+                            voter_1bit.c_str(), voter_rst_port.c_str(),
+                            module->name.c_str());
+        }
+    }
+
     for (size_t bit = 0; bit < wire_width; bit++) {
         RTLIL::Wire *bit_out = module->addWire(NEW_ID, 1);
         RTLIL::Wire *bit_err = module->addWire(NEW_ID, 1);
@@ -312,6 +396,11 @@ insert_voter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, c
         voter_inst->setPort("\\c", inputs.at(2).extract(bit, 1));
         voter_inst->setPort("\\y", bit_out);
         voter_inst->setPort("\\err", bit_err);
+
+        if (!voter_clk_port.empty() && parent_clk_wire)
+            voter_inst->setPort(voter_clk_port, parent_clk_wire);
+        if (!voter_rst_port.empty() && parent_rst_wire)
+            voter_inst->setPort(voter_rst_port, parent_rst_wire);
 
         output_bits.append(bit_out);
         error_bits.append(bit_err);

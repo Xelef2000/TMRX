@@ -1,4 +1,4 @@
-read_slang --top top counter.v \
+read_slang --top top acc_top.v \
         --compat-mode --keep-hierarchy \
         --allow-use-before-declare --ignore-unknown-modules
 hierarchy -check -top top
@@ -23,6 +23,8 @@ write_verilog -noattr 06_gates.v
 
 tmrx -c tmrx_config.toml
 write_verilog -noattr 07_tmrx.v
+show -format svg -prefix final_netlist top
+show -format dot -prefix final_netlist top
 
 opt -noff
 techmap
@@ -40,7 +42,7 @@ stat -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_t
 
 design -reset
 
-read_slang --top top counter.v \
+read_slang --top top acc_top.v \
         --compat-mode --keep-hierarchy \
         --allow-use-before-declare --ignore-unknown-modules
 
