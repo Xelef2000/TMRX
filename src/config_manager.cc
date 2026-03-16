@@ -1,6 +1,7 @@
 #include "config_manager.h"
 #include "kernel/log.h"
 #include "kernel/rtlil.h"
+#include "kernel/yosys.h"
 #include "kernel/yosys_common.h"
 #include <optional>
 #include <string>
@@ -30,12 +31,14 @@ std::string tmr_mode_to_string(TmrMode mode) {
 std::optional<TmrVoter> parse_tmr_voter(const std::string &str) {
     if (str.empty()) return std::nullopt;
     if (str == "Default") return TmrVoter::Default;
+    if (str == "Custom")  return TmrVoter::Custom;
     return std::nullopt;
 }
 
 std::string tmr_voter_to_string(TmrVoter voter) {
     switch (voter) {
         case TmrVoter::Default: return "Default";
+        case TmrVoter::Custom:  return "Custom";
     }
     return "Unknown";
 }
@@ -114,6 +117,12 @@ void ConfigManager::load_global_default_cfg() {
 
     global_cfg.tmr_mode = TmrMode::LogicTMR;
     global_cfg.tmr_voter = TmrVoter::Default;
+    global_cfg.tmr_voter_file = "";
+    global_cfg.tmr_voter_module = "";
+    global_cfg.tmr_voter_clock_port_name = "";
+    global_cfg.tmr_voter_reset_port_name = "";
+    global_cfg.tmr_voter_clock_net = "";
+    global_cfg.tmr_voter_reset_net = "";
     global_cfg.tmr_voter_safe_mode = true;
 
     global_cfg.preserve_module_ports = false;
@@ -239,6 +248,12 @@ ConfigPart ConfigManager::parse_config(const toml::value &t) {
     cfg.expand_reset = toml_find_optional<bool>(t, "expand_reset");
 
     // Parse string fields
+    cfg.tmr_voter_file             = toml_find_optional<std::string>(t, "tmr_voter_file");
+    cfg.tmr_voter_module           = toml_find_optional<std::string>(t, "tmr_voter_module");
+    cfg.tmr_voter_clock_port_name  = toml_find_optional<std::string>(t, "tmr_voter_clock_port_name");
+    cfg.tmr_voter_reset_port_name  = toml_find_optional<std::string>(t, "tmr_voter_reset_port_name");
+    cfg.tmr_voter_clock_net        = toml_find_optional<std::string>(t, "tmr_voter_clock_net");
+    cfg.tmr_voter_reset_net        = toml_find_optional<std::string>(t, "tmr_voter_reset_net");
     cfg.logic_path_1_suffix = toml_find_optional<std::string>(t, "logic_path_1_suffix");
     cfg.logic_path_2_suffix = toml_find_optional<std::string>(t, "logic_path_2_suffix");
     cfg.logic_path_3_suffix = toml_find_optional<std::string>(t, "logic_path_3_suffix");
@@ -289,6 +304,12 @@ ConfigPart ConfigManager::parse_module_annotations(const Yosys::RTLIL::Module *m
     cfg.expand_reset = get_bool_attr_value(mod, cfg_expand_rst_attr_name);
 
     // Parse string fields
+    cfg.tmr_voter_file            = get_string_attr_value(mod, cfg_tmr_voter_file_attr_name);
+    cfg.tmr_voter_module          = get_string_attr_value(mod, cfg_tmr_voter_module_attr_name);
+    cfg.tmr_voter_clock_port_name = get_string_attr_value(mod, cfg_tmr_voter_clock_port_name_attr_name);
+    cfg.tmr_voter_reset_port_name = get_string_attr_value(mod, cfg_tmr_voter_reset_port_name_attr_name);
+    cfg.tmr_voter_clock_net       = get_string_attr_value(mod, cfg_tmr_voter_clock_net_attr_name);
+    cfg.tmr_voter_reset_net       = get_string_attr_value(mod, cfg_tmr_voter_reset_net_attr_name);
     cfg.logic_path_1_suffix = get_string_attr_value(mod, cfg_logic_path_1_suffix_attr_name);
     cfg.logic_path_2_suffix = get_string_attr_value(mod, cfg_logic_path_2_suffix_attr_name);
     cfg.logic_path_3_suffix = get_string_attr_value(mod, cfg_logic_path_3_suffix_attr_name);
@@ -305,6 +326,12 @@ Config ConfigManager::assemble_config(std::vector<ConfigPart> parts, Config def)
     for (const auto &part : parts) {
         apply_if_present(cfg.tmr_mode, part.tmr_mode);
         apply_if_present(cfg.tmr_voter, part.tmr_voter);
+        apply_if_present(cfg.tmr_voter_file, part.tmr_voter_file);
+        apply_if_present(cfg.tmr_voter_module, part.tmr_voter_module);
+        apply_if_present(cfg.tmr_voter_clock_port_name, part.tmr_voter_clock_port_name);
+        apply_if_present(cfg.tmr_voter_reset_port_name, part.tmr_voter_reset_port_name);
+        apply_if_present(cfg.tmr_voter_clock_net, part.tmr_voter_clock_net);
+        apply_if_present(cfg.tmr_voter_reset_net, part.tmr_voter_reset_net);
         apply_if_present(cfg.tmr_voter_safe_mode, part.tmr_voter_safe_mode);
         apply_if_present(cfg.preserve_module_ports, part.preserve_module_ports);
         apply_if_present(cfg.insert_voter_before_ff, part.insert_voter_before_ff);
@@ -356,6 +383,91 @@ void ConfigManager::append_config_if_present(
 
     if (cfg_map.count(key) != 0) {
         cfg_parts.push_back(cfg_map.at(key));
+    }
+}
+
+void ConfigManager::load_custom_voters(Yosys::RTLIL::Design *design) {
+    Yosys::pool<std::string> loaded_files;
+
+    for (auto &[mod_name, c] : final_module_cfgs) {
+        if (c.tmr_voter != TmrVoter::Custom) continue;
+
+        if (c.tmr_voter_file.empty())
+            Yosys::log_error(
+                "Module '%s' uses Custom voter but tmr_voter_file is not set.\n",
+                mod_name.c_str());
+
+        if (c.tmr_voter_module.empty())
+            Yosys::log_error(
+                "Module '%s' uses Custom voter but tmr_voter_module is not set.\n",
+                mod_name.c_str());
+
+        if (loaded_files.count(c.tmr_voter_file) == 0) {
+            Yosys::log("Loading custom voter cell from '%s'\n", c.tmr_voter_file.c_str());
+            Yosys::run_pass("read_verilog " + c.tmr_voter_file, design);
+            // Convert any remaining behavioral code (always blocks present in
+            // partially-synthesised netlists) to RTLIL cells so that the
+            // subsequent techmap / dfflibmap passes can process them.
+            Yosys::run_pass("proc", design);
+            Yosys::run_pass("opt -fast", design);
+            loaded_files.insert(c.tmr_voter_file);
+        }
+
+        // Validate the loaded module has the required 1-bit port interface.
+        Yosys::RTLIL::IdString voter_id = Yosys::RTLIL::IdString("\\" + c.tmr_voter_module);
+        Yosys::RTLIL::Module *voter_mod = design->module(voter_id);
+
+        if (voter_mod == nullptr)
+            Yosys::log_error(
+                "Module '%s': custom voter module '%s' was not found in the design after "
+                "loading '%s'.\n",
+                mod_name.c_str(), c.tmr_voter_module.c_str(), c.tmr_voter_file.c_str());
+
+        voter_mod->fixup_ports();
+
+        auto check_port = [&](const std::string &port, bool expect_input) {
+            Yosys::RTLIL::Wire *w = voter_mod->wire("\\" + port);
+            if (w == nullptr)
+                Yosys::log_error(
+                    "Custom voter '%s': required port '%s' is missing.\n",
+                    c.tmr_voter_module.c_str(), port.c_str());
+            if (w->width != 1)
+                Yosys::log_error(
+                    "Custom voter '%s': port '%s' must be 1-bit (found %d-bit).\n",
+                    c.tmr_voter_module.c_str(), port.c_str(), w->width);
+            if (expect_input && !w->port_input)
+                Yosys::log_error(
+                    "Custom voter '%s': port '%s' must be an input.\n",
+                    c.tmr_voter_module.c_str(), port.c_str());
+            if (!expect_input && !w->port_output)
+                Yosys::log_error(
+                    "Custom voter '%s': port '%s' must be an output.\n",
+                    c.tmr_voter_module.c_str(), port.c_str());
+        };
+
+        check_port("a",   true);
+        check_port("b",   true);
+        check_port("c",   true);
+        check_port("y",   false);
+        check_port("err", false);
+
+        // Validate explicitly configured clock/reset port names.
+        if (!c.tmr_voter_clock_port_name.empty())
+            check_port(c.tmr_voter_clock_port_name, true);
+        if (!c.tmr_voter_reset_port_name.empty())
+            check_port(c.tmr_voter_reset_port_name, true);
+
+        // Keep the template module under its original name — insert_voter will
+        // clone it with a unique \tmrx_voter_<prefix>_w1 name per insertion
+        // site.  Exempt the template itself from TMR so it is never expanded.
+        Config exempt = global_cfg;
+        exempt.tmr_mode = TmrMode::None;
+        exempt.preserve_module_ports = true;
+        exempt.tmr_mode_full_module_insert_voter_before_modules = false;
+        exempt.tmr_mode_full_module_insert_voter_after_modules = false;
+        final_module_cfgs[voter_id] = exempt;
+        Yosys::log("Custom voter template '%s' exempted from TMR expansion.\n",
+                   c.tmr_voter_module.c_str());
     }
 }
 
@@ -655,6 +767,7 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
         final_module_cfgs[mod_name] = assemble_config(cfg_parts, global_cfg);
     }
 
+    load_custom_voters(design);
     validate_cfg(design);
 }
 
@@ -672,6 +785,18 @@ std::string ConfigManager::cfg_as_string(Yosys::RTLIL::Module *mod) const {
 
     ret += "TMR-Mode: " + tmr_mode_to_string(c->tmr_mode) + "\n";
     ret += "TMR-Voter: " + tmr_voter_to_string(c->tmr_voter) + "\n";
+    if (c->tmr_voter == TmrVoter::Custom) {
+        ret += "TMR-Voter File: " + c->tmr_voter_file + "\n";
+        ret += "TMR-Voter Module: " + c->tmr_voter_module + "\n";
+        if (!c->tmr_voter_clock_port_name.empty())
+            ret += "TMR-Voter Clock Port: " + c->tmr_voter_clock_port_name + "\n";
+        if (!c->tmr_voter_reset_port_name.empty())
+            ret += "TMR-Voter Reset Port: " + c->tmr_voter_reset_port_name + "\n";
+        if (!c->tmr_voter_clock_net.empty())
+            ret += "TMR-Voter Clock Net: " + c->tmr_voter_clock_net + "\n";
+        if (!c->tmr_voter_reset_net.empty())
+            ret += "TMR-Voter Reset Net: " + c->tmr_voter_reset_net + "\n";
+    }
     ret += "TMR-Voter Safe Mode: " + bool_to_string(c->tmr_voter_safe_mode) + "\n";
     ret += "Preserve Mod Ports: " + bool_to_string(c->preserve_module_ports) + "\n";
     ret += "Insert Voter before ff: " + bool_to_string(c->insert_voter_before_ff) + "\n";

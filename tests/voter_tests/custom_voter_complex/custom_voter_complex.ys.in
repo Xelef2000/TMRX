@@ -1,0 +1,82 @@
+read_slang --top top acc_top.v \
+        --compat-mode --keep-hierarchy \
+        --allow-use-before-declare --ignore-unknown-modules
+hierarchy -check -top top
+
+proc; opt; write_verilog -noattr 02_opt.v
+
+techmap
+write_verilog -noattr 03_techmap.v
+
+flatten
+write_verilog -noattr 04_flattened.v
+
+tmrx_mark
+
+read_liberty -lib @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+
+dfflibmap -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+write_verilog -noattr 05_dff.v
+
+abc -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+write_verilog -noattr 06_gates.v
+
+tmrx -c tmrx_config.toml
+write_verilog -noattr 07_tmrx.v
+show -format svg -prefix final_netlist top
+show -format dot -prefix final_netlist top
+
+opt -noff
+techmap
+dfflibmap -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+abc -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib -D 1000
+
+flatten
+opt_clean -purge
+
+clean
+write_verilog -noattr 08_final.v
+
+stat -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+
+
+design -reset
+
+read_slang --top top acc_top.v \
+        --compat-mode --keep-hierarchy \
+        --allow-use-before-declare --ignore-unknown-modules
+
+prep -top top
+flatten
+clean
+design -stash gold
+
+
+design -reset
+
+read_liberty -ignore_miss_func @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+
+read_verilog 08_final.v
+prep -top top
+flatten
+clean
+design -stash gate
+
+
+design -reset
+
+design -copy-from gold -as gold_top top
+design -copy-from gate -as synth_top top
+
+async2sync gold_top
+async2sync synth_top
+
+equiv_make gold_top synth_top equiv
+prep -top equiv
+
+equiv_simple
+# equiv_induct -undef
+# equiv_status -assert
+
+equiv_induct -seq 500 -undef
+equiv_status

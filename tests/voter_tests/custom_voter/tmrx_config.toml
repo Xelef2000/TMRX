@@ -1,0 +1,20 @@
+[global]
+tmr_mode = "LogicTMR"
+tmr_voter = "Custom"
+tmr_voter_file = "simple_voter.v"
+tmr_voter_module = "simple_voter"
+tmr_voter_safe_mode = false
+preserve_module_ports = true
+insert_voter_before_ff = false
+insert_voter_after_ff = true
+tmr_mode_full_module_insert_voter_before_modules = true
+tmr_mode_full_module_insert_voter_after_modules = true
+tmr_mode_full_module_insert_voter_on_clock_nets = false
+tmr_mode_full_module_insert_voter_on_reset_nets = false
+clock_port_names = ["clk_i"]
+expand_clock = false
+reset_port_names = ["rst_ni"]
+expand_reset = false
+logic_path_1_suffix = "_a"
+logic_path_2_suffix = "_b"
+logic_path_3_suffix = "_c"
