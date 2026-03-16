@@ -74,6 +74,7 @@ foreach v_file : verilog_files
                     timeout: 300,
                     workdir: meson.current_build_dir(),
                     depends: [slang_build, tmrx],
+                    suite: 'submodule_tests',
                   )
 
                 endforeach

@@ -97,6 +97,7 @@ test(
         'TMRX_CONFIG=' + (meson.current_build_dir() / 'tmrx_config.toml'),
         'RUN_LEQ=0',
     ],
+    suite: 'ref_tests',
 )
 
 test(
@@ -114,5 +115,5 @@ test(
         'TMRX_CONFIG=' + (meson.current_build_dir() / 'tmrx_config.toml'),
         'RUN_LEQ=1',
     ],
-    suite: 'slow',
+    suite: ['ref_tests', 'slow'],
 )

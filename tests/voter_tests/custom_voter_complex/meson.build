@@ -19,4 +19,5 @@ test(
   timeout: 300,
   workdir: meson.current_build_dir(),
   depends: [slang_build, tmrx],
+  suite: 'voter_tests',
 )
