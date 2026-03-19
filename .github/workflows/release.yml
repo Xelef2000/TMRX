@@ -1,39 +1,22 @@
-name: Draft Release
+name: Build and Release
 
 on:
   push:
     branches:
-      - main
+      - '**'
+  pull_request:
 
 permissions:
   contents: write
   pull-requests: read
 
 jobs:
-  draft-release:
-    name: Update draft release
-    runs-on: ubuntu-latest
-    outputs:
-      release_id: ${{ steps.drafter.outputs.id }}
-      upload_url: ${{ steps.drafter.outputs.upload_url }}
-      tag_name: ${{ steps.drafter.outputs.tag_name }}
-    steps:
-      - uses: release-drafter/release-drafter@v6
-        id: drafter
-        with:
-          config-name: release-drafter.yml
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   build:
     name: Build tmrx.so
-    runs-on: ubuntu-latest
-    needs: draft-release
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: false  # handled manually below
 
       - name: Install dependencies
         run: |
@@ -45,9 +28,8 @@ jobs:
             build-essential \
             git
 
-      - name: Clone IHP-Open-PDK
-        run: |
-          git clone --depth 1 https://github.com/IHP-GmbH/IHP-Open-PDK.git IHP-Open-PDK
+      - name: Verify yosys-config
+        run: yosys-config --version
 
       - name: Build tmrx plugin
         run: |
@@ -67,12 +49,46 @@ jobs:
             src/tmrx_utils.cc \
             --ldlibs
 
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tmrx.so
+          path: build/tmrx.so
+
+  draft-release:
+    name: Update draft release
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    needs: build
+    outputs:
+      release_id: ${{ steps.drafter.outputs.id }}
+      upload_url: ${{ steps.drafter.outputs.upload_url }}
+      tag_name: ${{ steps.drafter.outputs.tag_name }}
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        id: drafter
+        with:
+          config-name: release-drafter.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  upload-release-asset:
+    name: Upload tmrx.so to draft release
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    needs: [build, draft-release]
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tmrx.so
+
       - name: Upload tmrx.so to draft release
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.draft-release.outputs.upload_url }}
-          asset_path: build/tmrx.so
+          asset_path: tmrx.so
           asset_name: tmrx.so
           asset_content_type: application/octet-stream
