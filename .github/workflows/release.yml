@@ -18,11 +18,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install OSS CAD Suite (provides yosys + yosys-config)
+        uses: YosysHQ/setup-oss-cad-suite@v3
+
+      - name: Install build tools
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            yosys \
             meson \
             ninja-build \
             build-essential \
