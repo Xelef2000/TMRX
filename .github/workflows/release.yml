@@ -45,19 +45,13 @@ jobs:
             build-essential \
             git
 
-      - name: Clone yosys-slang
-        run: |
-          git clone --recursive https://github.com/povik/yosys-slang.git yosys-slang
-
       - name: Clone IHP-Open-PDK
         run: |
           git clone --depth 1 https://github.com/IHP-GmbH/IHP-Open-PDK.git IHP-Open-PDK
 
       - name: Build tmrx plugin
         run: |
-          # Build yosys-slang first (required by meson build)
-          make -C yosys-slang -j$(nproc)
-          # Build tmrx.so directly via yosys-config to avoid test dependencies
+          mkdir -p build
           yosys-config --exec --cxx --cxxflags \
             -I$PWD/include \
             --ldflags \
