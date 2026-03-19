@@ -1,0 +1,60 @@
+# Parametric formal equivalence check for sub-module instantiation combinations.
+
+[options]
+mode bmc
+depth 20
+
+[engines]
+smtbmc
+
+[script]
+plugin -i @SLANG_SO@
+plugin -i @TMRX_SO@
+
+# -------------------------------------------------------------------------
+# Gold: original RTL flattened to generic cells.
+# -------------------------------------------------------------------------
+read_slang --top top @VERILOG_FILE@ \
+        --compat-mode --keep-hierarchy \
+        --allow-use-before-declare --ignore-unknown-modules
+hierarchy -check -top top
+proc; opt; flatten
+opt_clean -purge
+design -save gold
+
+# -------------------------------------------------------------------------
+# Gate: hierarchy preserved through TMR so per-module configs apply,
+# then flattened (voters stay as cells due to keep_hierarchy).
+# -------------------------------------------------------------------------
+design -reset
+read_slang --top top @VERILOG_FILE@ \
+        --compat-mode --keep-hierarchy \
+        --allow-use-before-declare --ignore-unknown-modules
+hierarchy -check -top top
+proc; opt
+tmrx_mark
+tmrx -c @TOML_FILE@
+opt -noff
+flatten
+opt_clean -purge
+design -save gate
+
+# -------------------------------------------------------------------------
+# Merge and create equivalence miter.
+# -------------------------------------------------------------------------
+design -load gold
+rename top gold_mod
+design -copy-from gate *
+rename top gate_mod
+
+miter -equiv -make_assert -make_outputs gold_mod gate_mod miter
+hierarchy -top miter
+flatten
+# clk2fflogic is required when expand_clock=true causes a voter to drive a
+# clock net, producing a "derived clock" that smtbmc cannot handle directly.
+# It is safe to run unconditionally: for non-derived clocks it is a no-op.
+clk2fflogic
+
+[files]
+@VERILOG_FILE@
+@TOML_FILE@

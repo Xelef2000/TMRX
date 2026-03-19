@@ -154,6 +154,14 @@ std::vector<RTLIL::Wire *> connect_submodules_mod_ports(
                         port_a = RTLIL::IdString(port.str());
                         port_b = RTLIL::IdString(port.str());
                         port_c = RTLIL::IdString(port.str());
+                        // For output clock/rst ports the submodule drives a single
+                        // signal, but the parent may have triplicated the receiving
+                        // wire (e.g. nclk_b, nclk_c). Fan out to all copies so they
+                        // are not left undriven.
+                        if (!is_err && port_wire->port_output) {
+                            mod->connect(sig_b, sig);
+                            mod->connect(sig_c, sig);
+                        }
                         sig_b = sig;
                         sig_c = sig;
                     }

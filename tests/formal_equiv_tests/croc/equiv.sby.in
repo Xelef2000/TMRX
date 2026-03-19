@@ -1,0 +1,65 @@
+# Formal equivalence check for croc_soc after TMRX LogicTMR expansion.
+# croc_soc has preserve_module_ports=true so its external interface is stable;
+# the miter directly compares gold_mod and gate_mod port-for-port.
+
+[options]
+mode bmc
+depth 10
+
+[engines]
+smtbmc
+
+[script]
+plugin -i @SLANG_SO@
+plugin -i @TMRX_SO@
+
+# -------------------------------------------------------------------------
+# Gold: original RTL flattened to generic cells.
+# -------------------------------------------------------------------------
+read_slang --top croc_soc -f @CROC_FLIST_ABS@ \
+        --compat-mode --keep-hierarchy \
+        --allow-use-before-declare --ignore-unknown-modules
+# tc_sram_impl.sv is excluded from the flist (it instantiates IHP SRAM macros
+# whose verilog contains unsupported timing constructs).  hierarchy creates an
+# auto-blackbox stub for it with free outputs; same stub in gold and gate →
+# cancels in the miter.
+hierarchy -top croc_soc
+
+proc; opt; flatten
+opt_clean -purge
+design -save gold
+
+# -------------------------------------------------------------------------
+# Gate: apply TMRX, then flatten.
+# -------------------------------------------------------------------------
+design -reset
+read_slang --top croc_soc -f @CROC_FLIST_ABS@ \
+        --compat-mode --keep-hierarchy \
+        --allow-use-before-declare --ignore-unknown-modules
+hierarchy -top croc_soc
+
+proc; opt
+tmrx_mark
+tmrx -c @TOML_FILE@
+opt -noff
+flatten
+opt_clean -purge
+design -save gate
+
+# -------------------------------------------------------------------------
+# Merge and create equivalence miter.
+# -------------------------------------------------------------------------
+design -load gold
+rename croc_soc gold_mod
+design -copy-from gate *
+rename croc_soc gate_mod
+
+miter -equiv -make_assert -make_outputs gold_mod gate_mod miter
+hierarchy -top miter
+flatten
+# clk2fflogic converts clocked FFs to combinational logic so smtbmc can
+# handle any derived clocks introduced by expand_clock configurations.
+clk2fflogic
+
+[files]
+@TOML_FILE@

@@ -1,0 +1,58 @@
+# Formal equivalence check: config_complex top vs. TMRX LogicTMR expansion.
+# Tests hierarchical designs: multiple submodule levels, error sinks,
+# per-module TMR config overrides, and custom per-path suffixes.
+
+[options]
+mode bmc
+depth 20
+
+[engines]
+smtbmc
+
+[script]
+plugin -i @SLANG_SO@
+plugin -i @TMRX_SO@
+
+# -------------------------------------------------------------------------
+# Gold: original RTL flattened to generic cells.
+# -------------------------------------------------------------------------
+read_slang --top top top.v \
+        --compat-mode --keep-hierarchy \
+        --allow-use-before-declare --ignore-unknown-modules
+hierarchy -check -top top
+proc; opt; flatten
+opt_clean -purge
+design -save gold
+
+# -------------------------------------------------------------------------
+# Gate: hierarchy preserved through TMR so per-module configs apply,
+# then flattened (voters stay as cells due to keep_hierarchy).
+# -------------------------------------------------------------------------
+design -reset
+read_slang --top top top.v \
+        --compat-mode --keep-hierarchy \
+        --allow-use-before-declare --ignore-unknown-modules
+hierarchy -check -top top
+proc; opt
+tmrx_mark
+tmrx -c tmrx_config.toml
+opt -noff
+flatten
+opt_clean -purge
+design -save gate
+
+# -------------------------------------------------------------------------
+# Merge and create equivalence miter.
+# -------------------------------------------------------------------------
+design -load gold
+rename top gold_mod
+design -copy-from gate *
+rename top gate_mod
+
+miter -equiv -make_assert -make_outputs gold_mod gate_mod miter
+hierarchy -top miter
+flatten
+
+[files]
+top.v
+tmrx_config.toml
