@@ -1,0 +1,84 @@
+name: Draft Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  draft-release:
+    name: Update draft release
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.drafter.outputs.id }}
+      upload_url: ${{ steps.drafter.outputs.upload_url }}
+      tag_name: ${{ steps.drafter.outputs.tag_name }}
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        id: drafter
+        with:
+          config-name: release-drafter.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    name: Build tmrx.so
+    runs-on: ubuntu-latest
+    needs: draft-release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false  # handled manually below
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            yosys \
+            meson \
+            ninja-build \
+            build-essential \
+            git
+
+      - name: Clone yosys-slang
+        run: |
+          git clone --recursive https://github.com/povik/yosys-slang.git yosys-slang
+
+      - name: Clone IHP-Open-PDK
+        run: |
+          git clone --depth 1 https://github.com/IHP-GmbH/IHP-Open-PDK.git IHP-Open-PDK
+
+      - name: Build tmrx plugin
+        run: |
+          # Build yosys-slang first (required by meson build)
+          make -C yosys-slang -j$(nproc)
+          # Build tmrx.so directly via yosys-config to avoid test dependencies
+          yosys-config --exec --cxx --cxxflags \
+            -I$PWD/include \
+            --ldflags \
+            -shared \
+            -o build/tmrx.so \
+            src/tmrx.cc \
+            src/utils.cc \
+            src/tmrx_pass.cc \
+            src/mark_pass.cc \
+            src/config_manager.cc \
+            src/tmrx_logic_expansion.cc \
+            src/tmrx_mod_expansion.cc \
+            src/tmrx_utils.cc \
+            --ldlibs
+
+      - name: Upload tmrx.so to draft release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.draft-release.outputs.upload_url }}
+          asset_path: build/tmrx.so
+          asset_name: tmrx.so
+          asset_content_type: application/octet-stream
