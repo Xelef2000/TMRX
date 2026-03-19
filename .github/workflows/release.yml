@@ -35,29 +35,24 @@ jobs:
         with:
           submodules: false  # handled manually below
 
-      - name: Install dependencies
+      - name: Install OSS-CAD-Suite (provides yosys + yosys-config)
+        uses: YosysHQ/setup-oss-cad-suite@v3
+
+      - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            yosys \
-            meson \
-            ninja-build \
-            build-essential \
-            git
+          sudo apt-get install -y build-essential cmake ninja-build git
 
       - name: Clone yosys-slang
         run: |
           git clone --recursive https://github.com/povik/yosys-slang.git yosys-slang
 
-      - name: Clone IHP-Open-PDK
-        run: |
-          git clone --depth 1 https://github.com/IHP-GmbH/IHP-Open-PDK.git IHP-Open-PDK
+      - name: Build yosys-slang
+        run: make -C yosys-slang -j$(nproc)
 
       - name: Build tmrx plugin
         run: |
-          # Build yosys-slang first (required by meson build)
-          make -C yosys-slang -j$(nproc)
-          # Build tmrx.so directly via yosys-config to avoid test dependencies
+          mkdir -p build
           yosys-config --exec --cxx --cxxflags \
             -I$PWD/include \
             --ldflags \
