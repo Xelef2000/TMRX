@@ -425,24 +425,25 @@ void ConfigManager::load_custom_voters(Yosys::RTLIL::Design *design) {
 
         voter_mod->fixup_ports();
 
+        const std::string voter_module_name = c.tmr_voter_module;
         auto check_port = [&](const std::string &port, bool expect_input) {
             Yosys::RTLIL::Wire *w = voter_mod->wire("\\" + port);
             if (w == nullptr)
                 Yosys::log_error(
                     "Custom voter '%s': required port '%s' is missing.\n",
-                    c.tmr_voter_module.c_str(), port.c_str());
+                    voter_module_name.c_str(), port.c_str());
             if (w->width != 1)
                 Yosys::log_error(
                     "Custom voter '%s': port '%s' must be 1-bit (found %d-bit).\n",
-                    c.tmr_voter_module.c_str(), port.c_str(), w->width);
+                    voter_module_name.c_str(), port.c_str(), w->width);
             if (expect_input && !w->port_input)
                 Yosys::log_error(
                     "Custom voter '%s': port '%s' must be an input.\n",
-                    c.tmr_voter_module.c_str(), port.c_str());
+                    voter_module_name.c_str(), port.c_str());
             if (!expect_input && !w->port_output)
                 Yosys::log_error(
                     "Custom voter '%s': port '%s' must be an output.\n",
-                    c.tmr_voter_module.c_str(), port.c_str());
+                    voter_module_name.c_str(), port.c_str());
         };
 
         check_port("a",   true);
