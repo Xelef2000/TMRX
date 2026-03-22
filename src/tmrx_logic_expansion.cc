@@ -134,8 +134,13 @@ std::vector<RTLIL::Wire *> connect_submodules_mod_ports(
         RTLIL::IdString port_b = RTLIL::IdString(port.str() + cell_cfg->logic_path_2_suffix);
         RTLIL::IdString port_c = RTLIL::IdString(port.str() + cell_cfg->logic_path_3_suffix);
 
-        RTLIL::SigSpec sig_b = wire_map.at(sig).first;
-        RTLIL::SigSpec sig_c = wire_map.at(sig).second;
+        // Build B/C copies using replace so bit-slice connections
+        // (e.g. bus[3]) are handled even though wire_map keys are full wires.
+        RTLIL::SigSpec sig_b = sig, sig_c = sig;
+        for (auto &kv : wire_map) {
+            sig_b.replace(kv.first, kv.second.first);
+            sig_c.replace(kv.first, kv.second.second);
+        }
 
         if (port_wire != nullptr) {
                     bool is_clk = is_clk_wire(port_wire, cell_cfg);
@@ -235,8 +240,11 @@ std::vector<RTLIL::Wire *> connect_submodules_preserver_mod_ports(
     for (auto port : input_ports) {
         RTLIL::SigSpec sig_a = cell->getPort(port);
 
-        RTLIL::SigSpec sig_b = wire_map.at(sig_a).first;
-        RTLIL::SigSpec sig_c = wire_map.at(sig_a).second;
+        RTLIL::SigSpec sig_b = sig_a, sig_c = sig_a;
+        for (auto &kv : wire_map) {
+            sig_b.replace(kv.first, kv.second.first);
+            sig_c.replace(kv.first, kv.second.second);
+        }
         std::vector<RTLIL::SigSpec> inputs = {sig_a, sig_b, sig_c};
 
         // log("Port %s sigs %i", port.c_str(), sig_a==sig_b);
@@ -252,8 +260,11 @@ std::vector<RTLIL::Wire *> connect_submodules_preserver_mod_ports(
     for (auto port : output_ports) {
         RTLIL::SigSpec sig_a = cell->getPort(port);
 
-        RTLIL::SigSpec sig_b = wire_map.at(sig_a).first;
-        RTLIL::SigSpec sig_c = wire_map.at(sig_a).second;
+        RTLIL::SigSpec sig_b = sig_a, sig_c = sig_a;
+        for (auto &kv : wire_map) {
+            sig_b.replace(kv.first, kv.second.first);
+            sig_c.replace(kv.first, kv.second.second);
+        }
 
         RTLIL::Wire *new_output = mod->addWire(NEW_ID, sig_a.size());
         cell->setPort(port, new_output);

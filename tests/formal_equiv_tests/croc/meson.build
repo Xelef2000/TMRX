@@ -1,13 +1,8 @@
-# Croc is cloned by tests/ref_tests/croc (clone_croc target).
-# We reference the same directory via an absolute build-root path and create
-# an independent idempotent clone stamp so this test can also run standalone.
-
 croc_commit = '4ca88de5ce533c48bc2f1d77da57f5c8ff4859d1'
 croc_url    = 'https://github.com/pulp-platform/croc.git'
-croc_dir    = meson.project_build_root() / 'tests' / 'ref_tests' / 'croc' / 'croc'
+croc_dir    = meson.current_build_dir() / 'croc'
 croc_flist  = croc_dir / 'yosys' / 'src' / 'croc.flist'
 
-# Idempotent clone: re-uses the repo cloned by ref_tests/croc if already present.
 clone_croc_formal = custom_target(
     'clone_croc_formal',
     output: 'croc_clone_formal.stamp',
@@ -61,11 +56,15 @@ gen_flist = custom_target(
     ],
 )
 
+tc_sram_stub = meson.current_source_dir() / 'tc_sram_impl_stub.sv'
+
 croc_conf = configuration_data()
 croc_conf.set('SLANG_SO',       slang_plugin_path)
 croc_conf.set('TMRX_SO',        plugin_path)
 croc_conf.set('CROC_FLIST_ABS', croc_flist_abs)
 croc_conf.set('TOML_FILE',      meson.current_build_dir() / 'tmrx_config.toml')
+croc_conf.set('TC_SRAM_STUB',   tc_sram_stub)
+croc_conf.set('SG13G2_STUBS',   meson.current_source_dir() / 'sg13g2_stubs.sv')
 
 configure_file(
     input: 'equiv.sby.in',
