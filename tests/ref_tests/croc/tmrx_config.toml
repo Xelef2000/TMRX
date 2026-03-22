@@ -49,6 +49,32 @@ tmr_mode = "None"
 preserve_module_ports = true
 
 # ---------------------------------------------------------------------------
+# Clock generation group (None — no TMR).
+#
+# These modules generate or multiplex clock signals.  FullModuleTMR would
+# place a combinational majority voter directly on the clk_o output net,
+# which is a design-rule violation: STA tools do not recognise voter outputs
+# as clocks, the added gate delay causes skew, and three independent divider
+# counters can slip out of phase, producing a glitchy voted clock.
+# Clock hardening is better addressed through layout shielding or a
+# cold-standby / glitch-free mux strategy, not output voting.
+# ---------------------------------------------------------------------------
+[groupclock_gen]
+tmr_mode = "None"
+preserve_module_ports = true
+
+# ---------------------------------------------------------------------------
+# Reset generation group (FullModuleTMR).
+#
+# These modules synchronise or generate the design-wide reset.  Three
+# independent reset synchroniser chains with a voter on rst_no is an accepted
+# TMR pattern: all three copies deassert in the same clock cycle under normal
+# operation, and the voter masks a single-copy fault.
+# ---------------------------------------------------------------------------
+[groupreset_gen]
+tmr_mode = "FullModuleTMR"
+
+# ---------------------------------------------------------------------------
 # CDC group definitions.
 # ---------------------------------------------------------------------------
 
@@ -111,6 +137,15 @@ tc_clk_mux2     = "clock_cells"
 tc_clk_xor2     = "clock_cells"
 tc_clk_or2      = "clock_cells"
 tc_clk_delay    = "clock_cells"
+
+# --- Clock generation (None — voter on clk_o would violate clock rules) ---
+clk_int_div        = "clock_gen"  # runtime-configurable integer divider
+clk_int_div_static = "clock_gen"  # static wrapper around clk_int_div
+clk_mux_glitch_free = "clock_gen" # N-input glitch-free clock mux + OR tree
+
+# --- Reset generation (FullModuleTMR) ---
+rstgen        = "reset_gen"  # reset synchroniser (wrapper)
+rstgen_bypass = "reset_gen"  # reset synchroniser with test-mode bypass
 
 # --- CDC: outermost crossing boundary (FullModuleTMR) ---
 # (dmi_cdc is assigned under jtag_debug below; re-assign here if that
