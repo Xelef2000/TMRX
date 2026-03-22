@@ -1,0 +1,61 @@
+[global]
+# tmr_mode = "FullModuleTMR"
+tmr_mode = "LogicTMR"
+tmr_voter = "Default"
+preserve_module_ports = false
+tmr_voter_safe_mode = false
+insert_voter_before_ff = false
+insert_voter_after_ff = true
+tmr_mode_full_module_insert_voter_before_modules = true
+tmr_mode_full_module_insert_voter_after_modules = true
+clock_port_names = ["clk_i"]
+expand_clock = false
+reset_port_names = ["rst_ni"]
+expand_reset = false
+logic_path_1_suffix = "_a"
+logic_path_2_suffix = "_b"
+logic_path_3_suffix = "_c"
+
+# tc_sram_impl instantiates IHP SRAM macros not available as RTL.
+# Exclude from TMR so the formal tool does not need the macro bodies.
+# The SRAM's external OBI interface is still covered by the croc_soc check.
+[module_tc_sram_impl]
+tmr_mode = "None"
+
+[module_croc_chip]
+tmr_mode = "None"
+preserve_module_ports = true
+
+[module_croc_soc]
+preserve_module_ports = true
+
+# IHP IO pad cells are blackboxes (from liberty) so they get FullModuleTMR by
+# default from the black_box_module group. Override to None since they are
+# boundary cells that must not be triplicated.
+[module_sg13g2_IOPadIn]
+tmr_mode = "None"
+
+[module_sg13g2_IOPadInOut30mA]
+tmr_mode = "None"
+
+[module_sg13g2_IOPadOut16mA]
+tmr_mode = "None"
+
+[module_sg13g2_IOPadOut4mA]
+tmr_mode = "None"
+
+[module_sg13g2_IOPadVdd]
+tmr_mode = "None"
+
+[module_sg13g2_IOPadVss]
+tmr_mode = "None"
+
+[module_sg13g2_IOPadIOVdd]
+tmr_mode = "None"
+
+[module_sg13g2_IOPadIOVss]
+tmr_mode = "None"
+
+[module_sg13g2_mux2_1]
+tmr_mode = "None"
+preserve_module_ports = true

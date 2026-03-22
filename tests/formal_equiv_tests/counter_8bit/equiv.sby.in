@@ -1,0 +1,57 @@
+# Formal equivalence check: counter_8bit original vs. TMRX LogicTMR expansion.
+
+[options]
+mode bmc
+depth 20
+
+[engines]
+smtbmc
+
+[script]
+plugin -i @SLANG_SO@
+plugin -i @TMRX_SO@
+
+# -------------------------------------------------------------------------
+# Gold: original RTL flattened to generic cells.
+# -------------------------------------------------------------------------
+read_slang --top counter_8bit counter_8bit.v \
+        --compat-mode --keep-hierarchy \
+        --allow-use-before-declare --ignore-unknown-modules
+hierarchy -check -top counter_8bit
+proc; opt; flatten
+opt_clean -purge
+design -save gold
+
+# -------------------------------------------------------------------------
+# Gate: hierarchy preserved through TMR, flattened afterwards.
+# Flattening before tmrx would lose module boundaries needed for per-module
+# config; flatten after so voters (keep_hierarchy) stay as cell references.
+# -------------------------------------------------------------------------
+design -reset
+read_slang --top counter_8bit counter_8bit.v \
+        --compat-mode --keep-hierarchy \
+        --allow-use-before-declare --ignore-unknown-modules
+hierarchy -check -top counter_8bit
+proc; opt
+tmrx_mark
+tmrx -c tmrx_config.toml
+opt -noff
+flatten
+opt_clean -purge
+design -save gate
+
+# -------------------------------------------------------------------------
+# Merge and create equivalence miter.
+# -------------------------------------------------------------------------
+design -load gold
+rename counter_8bit gold_mod
+design -copy-from gate *
+rename counter_8bit gate_mod
+
+miter -equiv -make_assert -make_outputs gold_mod gate_mod miter
+hierarchy -top miter
+flatten
+
+[files]
+counter_8bit.v
+tmrx_config.toml

@@ -1,0 +1,77 @@
+# Formal equivalence check for croc_soc after TMRX LogicTMR expansion.
+# croc_soc has preserve_module_ports=true so its external interface is stable;
+# the miter directly compares gold_mod and gate_mod port-for-port.
+
+[options]
+mode bmc
+depth 10
+
+[engines]
+smtbmc
+
+[script]
+plugin -i @SLANG_SO@
+plugin -i @TMRX_SO@
+
+# -------------------------------------------------------------------------
+# Gold: original RTL flattened to generic cells.
+# -------------------------------------------------------------------------
+# tc_sram_impl_stub.sv must be read before the flist so slang can resolve
+# implicit port connections (.clk_i, / .rst_ni,) inside croc_domain.sv.
+# The real tc_sram_impl.sv (IHP SRAM macros) is excluded from the flist.
+read_slang --top croc_soc tc_sram_impl_stub.sv -f @CROC_FLIST_ABS@ \
+        --compat-mode --keep-hierarchy \
+        --allow-use-before-declare --ignore-unknown-modules
+hierarchy -top croc_soc
+# Read IHP standard cell library as blackboxes so sg13g2_* cells instantiated
+# inside tc_clk_mux2 and similar modules are recognised by Yosys.
+# --ignore-unknown-modules only suppresses slang errors; it does NOT create
+# Yosys module definitions, so we must supply them explicitly.
+read_verilog -sv @SG13G2_STUBS@
+
+proc; opt; flatten
+opt_clean -purge
+design -save gold
+
+# -------------------------------------------------------------------------
+# Gate: apply TMRX, then flatten.
+# -------------------------------------------------------------------------
+design -reset
+read_slang --top croc_soc tc_sram_impl_stub.sv -f @CROC_FLIST_ABS@ \
+        --compat-mode --keep-hierarchy \
+        --allow-use-before-declare --ignore-unknown-modules
+hierarchy -top croc_soc
+read_verilog -sv @SG13G2_STUBS@
+
+proc; opt
+tmrx_mark
+tmrx -c @TOML_FILE@
+opt -noff
+flatten
+opt_clean -purge
+design -save gate
+
+# -------------------------------------------------------------------------
+# Merge and create equivalence miter.
+# -------------------------------------------------------------------------
+design -load gold
+rename croc_soc gold_mod
+design -copy-from gate *
+rename croc_soc gate_mod
+
+miter -equiv -make_assert -make_outputs gold_mod gate_mod miter
+hierarchy -top miter
+flatten
+# Force all undefined (X) FF initial values to 0 in both gold and gate before
+# clk2fflogic runs.  Without this, sby's prep pass replaces X init values with
+# $anyseq free variables, allowing the SMT solver to pick asymmetric initial
+# states (e.g. gate.ff_a/b/c = 1 while gold.ff = 0) that are trivial
+# counterexamples with no bearing on TMR correctness.
+setundef -zero -init
+# clk2fflogic converts clocked FFs to combinational logic so smtbmc can
+# handle any derived clocks introduced by expand_clock configurations.
+clk2fflogic
+
+[files]
+@TOML_FILE@
+@TC_SRAM_STUB@

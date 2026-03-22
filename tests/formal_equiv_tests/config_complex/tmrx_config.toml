@@ -1,0 +1,34 @@
+# Adapted from config_tests/global-1 for formal equivalence:
+#   - preserve_module_ports = true added for top so the miter interface is stable
+#   - ff_cells / dfflibmap cells removed (not needed at RTL level)
+[global]
+tmr_mode = "LogicTMR"
+tmr_voter = "Default"
+preserve_module_ports = false
+insert_voter_before_ff = false
+insert_voter_after_ff = true
+clock_port_names = ["clk_i"]
+expand_clock = false
+reset_port_names = ["rst_ni"]
+expand_reset = false
+logic_path_1_suffix = "_a"
+logic_path_2_suffix = "_b"
+logic_path_3_suffix = "_c"
+
+[module_top]
+preserve_module_ports = true
+
+[module_groups]
+mod1 = "groupA"
+mod2 = "groupB"
+
+[groupA]
+tmr_mode = "LogicTMR"
+insert_voter_before_ff = true
+
+[groupB]
+tmr_voter = "Default"
+expand_clock = false
+
+[module_mod1]
+tmr_mode = "None"

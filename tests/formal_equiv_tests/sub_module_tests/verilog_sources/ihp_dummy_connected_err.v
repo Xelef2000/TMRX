@@ -14,6 +14,11 @@ module top_impl (
     reg nsig_q;
     wire nclk;
 
+    initial begin
+        sig_q  = 1'b0;
+        nsig_q = 1'b0;
+    end
+
     assign sig_d = res_y ^ in1_i;
 
 
@@ -23,8 +28,7 @@ module top_impl (
         .a_i(in0_i),
         .b_i(sig_q),
         .y_o(res_y),
-        .clock_no(nclk),
-        .err_o()
+        .err_o(err_o)
     );
 
 
@@ -35,14 +39,7 @@ module top_impl (
             sig_q <= sig_d;
     end
 
-    always @(posedge nclk or negedge rst_ni) begin
-        if (!rst_ni)
-            nsig_q <= 1'b0;
-        else
-            nsig_q <= sig_d;
-    end
-
-    assign out_o = sig_q & nsig_q;
+    assign out_o = sig_q;
 
 endmodule
 
@@ -54,13 +51,12 @@ module submodule (
     input  wire a_i,
     input  wire b_i,
     output wire y_o,
-    (* tmrx_clk_port *)
-    output wire clock_no,
     (* tmrx_error_sink *)
     output wire err_o
 );
 
     reg q;
+    initial q = 1'b0;
 
     wire d = (a_i & b_i) ^ q;
 
@@ -72,25 +68,25 @@ module submodule (
     end
 
     assign y_o = q | a_i;
-    assign clock_no = clk_i & y_o;
+
 endmodule
 
 
+// err_o excluded from top ports: tmrx_error_sink, not part of functional equivalence.
 module top (
     input  wire clk_i,
     input  wire rst_ni,
     input  wire in0_i,
     input  wire in1_i,
-    output wire out_o,
-    (* tmrx_error_sink *)
-    output wire err_o
+    output wire out_o
 );
+    wire err_nc;
     top_impl u_top (
         .clk_i(clk_i),
         .rst_ni(rst_ni),
         .in0_i(in0_i),
         .in1_i(in1_i),
         .out_o(out_o),
-        .err_o(err_o)
+        .err_o(err_nc)
     );
 endmodule

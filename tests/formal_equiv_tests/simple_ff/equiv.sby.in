@@ -1,0 +1,75 @@
+# Formal equivalence check: simple_ff original vs. TMRX LogicTMR expansion.
+#
+# Strategy: bounded model checking (BMC) starting from the fixed initial state
+# defined by the 'initial' blocks in the RTL.  TMRX propagates 'init'
+# attributes to all three TMR copies, so gold and gate both start at all-zeros
+# and BMC is a complete proof for input sequences up to <depth> cycles.
+#
+# The script builds two design checkpoints in Yosys:
+#   gold  – original RTL, processed to generic cells
+#   gate  – same RTL with TMRX LogicTMR applied
+# Both are merged into a miter circuit whose output assertions are checked.
+
+[options]
+mode bmc
+depth 20
+
+[engines]
+smtbmc
+
+[script]
+# Load plugins once; they persist across design -reset.
+plugin -i @SLANG_SO@
+plugin -i @TMRX_SO@
+
+# -------------------------------------------------------------------------
+# Gold: original design, processed down to generic (non-technology) cells.
+# -------------------------------------------------------------------------
+read_slang simple_ff.v
+hierarchy -top simple_ff -check
+proc; opt; flatten
+# Remove unused module definitions (e.g. simple_ff_core after inlining) so
+# that copying all gate modules later does not cause name conflicts.
+opt_clean -purge
+design -save gold
+
+# -------------------------------------------------------------------------
+# Gate: same source, with TMRX LogicTMR applied.
+# tmrx_mark identifies $dff / builtin FF cells without tech-mapping.
+# -------------------------------------------------------------------------
+design -reset
+read_slang simple_ff.v
+hierarchy -top simple_ff -check
+proc; opt; flatten
+tmrx_mark
+tmrx -c tmrx_config.toml
+opt -noff
+
+write_verilog -noattr final.v
+
+flatten
+
+write_verilog -noattr final_flattend.v
+
+design -save gate
+
+# -------------------------------------------------------------------------
+# Merge both into a miter and assert output equivalence.
+# -------------------------------------------------------------------------
+design -load gold
+rename simple_ff gold_mod
+# Copy ALL modules from gate (simple_ff + tmrx_voter_* + any helpers).
+# Using -as alone would only copy simple_ff and leave voter modules behind,
+# causing "module not part of design" errors during flatten.
+design -copy-from gate *
+rename simple_ff gate_mod
+
+# miter -equiv wires shared inputs together, and -make_assert adds an
+# $assert cell for each output pair so the SMT solver can check them.
+miter -equiv -flatten -make_assert -make_outputs gold_mod gate_mod miter
+hierarchy -top miter
+flatten
+
+[files]
+simple_ff.v
+tmrx_config.toml
