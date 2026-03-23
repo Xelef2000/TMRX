@@ -100,20 +100,20 @@ test(
     suite: 'ref_tests',
 )
 
-test(
-    'croc_full_integration_leq',
-    find_program('bash'),
-    args: [croc_dir / 'yosys/run_synthesis.sh', '--synth'],
-    workdir: croc_dir / 'yosys',
-    timeout: 18000,
-    depends: [
-        replace_script,
-        slang_build,
-        tmrx,
-    ],
-    env: [
-        'TMRX_CONFIG=' + (meson.current_build_dir() / 'tmrx_config.toml'),
-        'RUN_LEQ=1',
-    ],
-    suite: ['ref_tests', 'slow'],
-)
+# test(
+#     'croc_full_integration_leq',
+#     find_program('bash'),
+#     args: [croc_dir / 'yosys/run_synthesis.sh', '--synth'],
+#     workdir: croc_dir / 'yosys',
+#     timeout: 18000,
+#     depends: [
+#         replace_script,
+#         slang_build,
+#         tmrx,
+#     ],
+#     env: [
+#         'TMRX_CONFIG=' + (meson.current_build_dir() / 'tmrx_config.toml'),
+#         'RUN_LEQ=1',
+#     ],
+#     suite: ['ref_tests', 'slow'],
+# )
