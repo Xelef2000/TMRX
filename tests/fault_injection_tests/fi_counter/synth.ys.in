@@ -1,0 +1,8 @@
+plugin -i @TMRX_SO@
+read_verilog @INPUT_V@
+hierarchy -top @TOP@
+proc; opt
+tmrx_mark
+tmrx -c @TMRX_CONFIG@
+opt -noff
+write_verilog -noattr @OUTPUT_V@
