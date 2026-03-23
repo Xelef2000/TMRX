@@ -189,6 +189,7 @@ dm_sba                = "jtag_debug"  # debug module system bus access
 dm_obi_top            = "jtag_debug"  # OBI bus adapter for the debug module
 debug_rom             = "jtag_debug"  # debug ROM (halt/resume trampoline)
 debug_rom_one_scratch = "jtag_debug"  # debug ROM variant with one scratch register
+fifo_v3               = "jtag_debug"  # parameterized FIFO used inside dm_csrs
 
 [module_croc_chip]
 tmr_mode = "None"

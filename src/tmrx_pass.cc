@@ -113,12 +113,15 @@ struct TmrxPass : public Pass {
             }
         }
 
-        // Remove original modules that were cloned to _tmrx_impl. By this
-        // point all parent modules have had their cells remapped to the
-        // _tmrx_impl variant, so the originals are unreferenced. Leaving them
-        // in the design causes `stat -top` to crash because stat iterates
-        // design->selected_modules() but only builds mod_stat for modules
-        // reachable from the top (std::out_of_range on missing keys).
+        // Remove original modules that were cloned to _tmrx_impl, but only if
+        // no module in the design still references them. A None-mode parent is
+        // never remapped to the _tmrx_impl variant, so it may still hold a
+        // cell whose type points to the original. In that case the original
+        // must be kept; it is reachable from the top through the None-mode
+        // parent, so `stat -top` will not crash. Originals with no remaining
+        // references are safe to delete (keeping them would cause the stat
+        // crash described above, because stat only builds mod_stat for modules
+        // reachable from the top).
         std::vector<RTLIL::IdString> to_remove;
         for (auto module : design->modules()) {
             if (module->has_attribute(ID(tmrx_impl_module))) {
@@ -126,9 +129,25 @@ struct TmrxPass : public Pass {
             }
         }
         for (auto name : to_remove) {
-            log("Removing original module '%s' (replaced by _tmrx_impl clone)\n",
-                name.c_str());
-            design->remove(design->module(name));
+            bool still_referenced = false;
+            for (auto mod : design->modules()) {
+                for (auto cell : mod->cells()) {
+                    if (cell->type == name) {
+                        still_referenced = true;
+                        break;
+                    }
+                }
+                if (still_referenced)
+                    break;
+            }
+            if (still_referenced) {
+                log("Keeping original module '%s' (still referenced by None-mode parent)\n",
+                    name.c_str());
+            } else {
+                log("Removing original module '%s' (replaced by _tmrx_impl clone)\n",
+                    name.c_str());
+                design->remove(design->module(name));
+            }
         }
 
         log_pop();
