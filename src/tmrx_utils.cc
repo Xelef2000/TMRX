@@ -59,7 +59,13 @@ bool is_rst_wire(const RTLIL::Wire *w, const Config *cfg) {
     return ((cfg->reset_port_names.count(w->name) != 0) || w->has_attribute(ID(tmrx_rst_port)));
 }
 
-bool is_tmr_error_out_wire(RTLIL::Wire *w) { return (w->has_attribute(ID(tmrx_error_sink))); }
+bool is_tmr_error_out_wire(RTLIL::Wire *w, const Config *cfg) {
+    if (w->has_attribute(ID(tmrx_error_sink)))
+        return true;
+    if (cfg && !cfg->error_port_name.empty())
+        return w->name == RTLIL::IdString("\\" + cfg->error_port_name);
+    return false;
+}
 
 std::pair<std::vector<RTLIL::IdString>, std::vector<RTLIL::IdString>>
 get_port_names(const RTLIL::Cell *cell, const RTLIL::Design *design) {
@@ -421,14 +427,15 @@ insert_voter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, c
     return {last_wire, err_wire};
 }
 
-void connect_error_signal(RTLIL::Module *mod,const std::vector<RTLIL::Wire *> &error_signals) {
+void connect_error_signal(RTLIL::Module *mod, const std::vector<RTLIL::Wire *> &error_signals,
+                          const Config *cfg) {
 
     RTLIL::Wire *sink = nullptr;
     for (auto w : mod->wires()) {
         if (!w->port_output) {
             continue;
         }
-        if (is_tmr_error_out_wire(w)) {
+        if (is_tmr_error_out_wire(w, cfg)) {
             if (sink != nullptr) {
                 log_error("Duplicate error sinks, only one allowed");
             }
