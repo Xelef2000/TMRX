@@ -1,0 +1,18 @@
+# Test: a child module can declare its error sink via `error_port_name`
+# in config, even when the parent uses a different config and leaves the
+# child error port unconnected.
+
+read_verilog top.v
+hierarchy -check -top top
+proc; opt
+
+tmrx_mark
+tmrx -c tmrx_config.toml
+
+# The top module has no annotated error sink. The only way to create
+# `tmrx_err_o` is for the parent connector to recognize the child's
+# `child_err_o` port using the CHILD config and allocate a wire for it.
+select -assert-count 1 top/w:tmrx_err_o
+select -assert-count 1 top/o:tmrx_err_o
+
+write_verilog -noattr child_error_port_name_out.v

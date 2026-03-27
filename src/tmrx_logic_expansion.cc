@@ -13,12 +13,151 @@ namespace {
     Yosys::pool<RTLIL::SigSpec> clk_net_wires;
     Yosys::pool<RTLIL::SigSpec> rst_net_wires;
 
+    enum class PortKind {
+        Data,
+        Clock,
+        Reset,
+        Error,
+    };
+
+    enum class PortShape {
+        Shared,
+        Triplicated,
+    };
+
+    struct TriplicatedSignals {
+        RTLIL::SigSpec a;
+        RTLIL::SigSpec b;
+        RTLIL::SigSpec c;
+    };
+
+    struct ChildPortNames {
+        PortShape shape;
+        RTLIL::IdString a;
+        RTLIL::IdString b;
+        RTLIL::IdString c;
+    };
+
+    struct ResolvedSubmodule {
+        RTLIL::Module *logical_module;
+        RTLIL::Module *effective_module;
+        const Config *child_cfg;
+        bool was_expanded_with_triplicated_ports;
+    };
+
     bool is_in_clk_net(const RTLIL::Wire *w) {
         return clk_net_wires.count(RTLIL::SigSpec(w)) != 0;
     }
 
     bool is_in_rst_net(const RTLIL::Wire *w) {
         return rst_net_wires.count(RTLIL::SigSpec(w)) != 0;
+    }
+
+    bool should_keep_wire_shared(const RTLIL::Wire *wire, const Config *cfg) {
+        return is_tmr_error_out_wire(const_cast<RTLIL::Wire *>(wire), cfg) ||
+               (cfg->preserve_module_ports && wire->port_input) ||
+               (is_clk_wire(wire, cfg) && !cfg->expand_clock) ||
+               (is_rst_wire(wire, cfg) && !cfg->expand_reset);
+    }
+
+    bool is_exposed_module_port(const RTLIL::Wire *wire) {
+        return wire != nullptr && (wire->port_input || wire->port_output);
+    }
+
+    TriplicatedSignals derive_parent_signals(
+        const RTLIL::SigSpec &sig_a,
+        const dict<RTLIL::SigSpec, std::pair<RTLIL::SigSpec, RTLIL::SigSpec>> &wire_map) {
+        TriplicatedSignals signals = {sig_a, sig_a, sig_a};
+
+        for (auto &kv : wire_map) {
+            signals.b.replace(kv.first, kv.second.first);
+            signals.c.replace(kv.first, kv.second.second);
+        }
+
+        return signals;
+    }
+
+    bool parent_signals_are_shared(const TriplicatedSignals &signals) {
+        return signals.a == signals.b && signals.a == signals.c;
+    }
+
+    PortKind classify_port_kind(const RTLIL::Wire *port_wire, const Config *child_cfg) {
+        if (is_tmr_error_out_wire(const_cast<RTLIL::Wire *>(port_wire), child_cfg)) {
+            return PortKind::Error;
+        }
+        if (is_clk_wire(port_wire, child_cfg)) {
+            return PortKind::Clock;
+        }
+        if (is_rst_wire(port_wire, child_cfg)) {
+            return PortKind::Reset;
+        }
+        return PortKind::Data;
+    }
+
+    ChildPortNames resolve_child_port_names(RTLIL::Module *effective_cell_mod,
+                                            RTLIL::IdString logical_port,
+                                            const Config *child_cfg) {
+        RTLIL::IdString port_a = RTLIL::IdString(logical_port.str() + child_cfg->logic_path_1_suffix);
+        RTLIL::IdString port_b = RTLIL::IdString(logical_port.str() + child_cfg->logic_path_2_suffix);
+        RTLIL::IdString port_c = RTLIL::IdString(logical_port.str() + child_cfg->logic_path_3_suffix);
+
+        bool has_base = is_exposed_module_port(effective_cell_mod->wire(logical_port));
+        bool has_a = is_exposed_module_port(effective_cell_mod->wire(port_a));
+        bool has_b = is_exposed_module_port(effective_cell_mod->wire(port_b));
+        bool has_c = is_exposed_module_port(effective_cell_mod->wire(port_c));
+
+        if (has_base && !has_a && !has_b && !has_c) {
+            return {PortShape::Shared, logical_port, logical_port, logical_port};
+        }
+
+        if (!has_base && has_a && has_b && has_c) {
+            return {PortShape::Triplicated, port_a, port_b, port_c};
+        }
+
+        if (!has_base && !has_a && !has_b && !has_c) {
+            log_error("Submodule port '%s' not found on effective module '%s'.\n",
+                      logical_port.c_str(), effective_cell_mod->name.c_str());
+        }
+
+        log_error("Unexpected mixed port expansion for '%s' on module '%s'.\n",
+                  logical_port.c_str(), effective_cell_mod->name.c_str());
+    }
+
+    void connect_parent_destinations(RTLIL::Module *mod, const TriplicatedSignals &destinations,
+                                     const RTLIL::SigSpec &source) {
+        mod->connect(destinations.a, source);
+        if (destinations.b != destinations.a) {
+            mod->connect(destinations.b, source);
+        }
+        if (destinations.c != destinations.a && destinations.c != destinations.b) {
+            mod->connect(destinations.c, source);
+        }
+    }
+
+    ResolvedSubmodule resolve_submodule(RTLIL::Module *mod, RTLIL::Cell *cell,
+                                        const ConfigManager *cfg_mgr) {
+        RTLIL::Module *logical_module = mod->design->module(cell->type);
+        if (logical_module == nullptr) {
+            log_error("No submodule definition found for cell '%s' (type '%s').\n",
+                      cell->name.c_str(), cell->type.c_str());
+        }
+
+        const Config *child_cfg = cfg_mgr->cfg(logical_module);
+        RTLIL::Module *effective_module = logical_module;
+        bool was_expanded_with_triplicated_ports = logical_module->has_attribute(ID(tmrx_impl_module));
+
+        if (was_expanded_with_triplicated_ports) {
+            RTLIL::IdString impl_name =
+                RTLIL::IdString(logical_module->get_string_attribute(ID(tmrx_impl_module)));
+            cell->type = impl_name;
+            effective_module = mod->design->module(impl_name);
+            if (effective_module == nullptr) {
+                log_error("No remapped submodule implementation '%s' for cell '%s'.\n",
+                          impl_name.c_str(), cell->name.c_str());
+            }
+        }
+
+        return {logical_module, effective_module, child_cfg, was_expanded_with_triplicated_ports};
     }
 
     void build_clk_net(RTLIL::Module *mod, const ConfigManager *cfg_mgr){
@@ -88,18 +227,14 @@ namespace {
     }
 
 
-std::vector<RTLIL::Wire *> connect_submodules_mod_ports(
-    RTLIL::Module *mod, RTLIL::Cell *cell, const Config *cell_cfg, const Config *mod_cfg,
-    dict<RTLIL::SigSpec, std::pair<RTLIL::SigSpec, RTLIL::SigSpec>> wire_map) {
-
+std::vector<RTLIL::Wire *> connect_submodule_ports(
+    RTLIL::Module *mod, RTLIL::Cell *cell, RTLIL::Module *logical_cell_mod,
+    RTLIL::Module *effective_cell_mod, const Config *child_cfg, const Config *parent_cfg,
+    const dict<RTLIL::SigSpec, std::pair<RTLIL::SigSpec, RTLIL::SigSpec>> &wire_map) {
     std::vector<RTLIL::Wire *> error_signals;
-    RTLIL::Design *design = mod->design;
-
-    if (!is_proper_submodule(design->module(cell->type))) {
+    if (!is_proper_submodule(logical_cell_mod)) {
         return error_signals;
     }
-
-    // const RTLIL::Module *cell_mod = design->module(cell->type);
 
     dict<RTLIL::IdString, RTLIL::SigSpec> orig_connections;
     for (auto &conn : cell->connections()) {
@@ -108,17 +243,9 @@ std::vector<RTLIL::Wire *> connect_submodules_mod_ports(
 
     cell->connections_.clear();
 
-    // TODO: handle  signal
-
-    RTLIL::Module *cell_mod = design->module(cell->type);
-
-    if (cell_mod == nullptr) {
-        log_error("No cell mod\n");
-    }
-
-    for (auto &port : cell_mod->ports) {
-        RTLIL::Wire *port_wire = cell_mod->wire(port);
-        if (orig_connections.count(port) == 0 && is_tmr_error_out_wire(port_wire, cell_cfg)) {
+    for (auto &port : effective_cell_mod->ports) {
+        RTLIL::Wire *port_wire = effective_cell_mod->wire(port);
+        if (orig_connections.count(port) == 0 && is_tmr_error_out_wire(port_wire, child_cfg)) {
             RTLIL::Wire *err_wire = mod->addWire(NEW_ID, port_wire->width);
             cell->setPort(port, err_wire);
             error_signals.push_back(err_wire);
@@ -126,151 +253,80 @@ std::vector<RTLIL::Wire *> connect_submodules_mod_ports(
     }
 
     for (auto &orig_conn : orig_connections) {
-        RTLIL::IdString port = orig_conn.first;
-        RTLIL::Wire *port_wire = cell_mod->wire(port);
-        RTLIL::SigSpec sig = orig_conn.second;
-
-        RTLIL::IdString port_a = RTLIL::IdString(port.str() + cell_cfg->logic_path_1_suffix);
-        RTLIL::IdString port_b = RTLIL::IdString(port.str() + cell_cfg->logic_path_2_suffix);
-        RTLIL::IdString port_c = RTLIL::IdString(port.str() + cell_cfg->logic_path_3_suffix);
-
-        // Build B/C copies using replace so bit-slice connections
-        // (e.g. bus[3]) are handled even though wire_map keys are full wires.
-        RTLIL::SigSpec sig_b = sig, sig_c = sig;
-        for (auto &kv : wire_map) {
-            sig_b.replace(kv.first, kv.second.first);
-            sig_c.replace(kv.first, kv.second.second);
+        RTLIL::IdString logical_port = orig_conn.first;
+        RTLIL::Wire *logical_port_wire = logical_cell_mod->wire(logical_port);
+        if (logical_port_wire == nullptr) {
+            log_error("No logical port '%s' on submodule '%s'.\n", logical_port.c_str(),
+                      logical_cell_mod->name.c_str());
         }
 
-        if (port_wire != nullptr) {
-                    bool is_clk = is_clk_wire(port_wire, cell_cfg);
-                    bool is_rst = is_rst_wire(port_wire, cell_cfg);
-                    bool is_err = is_tmr_error_out_wire(port_wire, cell_cfg);
+        PortKind port_kind = classify_port_kind(logical_port_wire, child_cfg);
+        ChildPortNames child_ports = resolve_child_port_names(effective_cell_mod, logical_port, child_cfg);
+        TriplicatedSignals parent_signals = derive_parent_signals(orig_conn.second, wire_map);
+        bool parent_shared = parent_signals_are_shared(parent_signals);
 
-                    bool cell_no_exp_clk = is_clk && !cell_cfg->expand_clock;
-                    bool cell_no_exp_rst = is_rst && !cell_cfg->expand_reset;
-                    bool mod_exp_clk = is_clk && mod_cfg->expand_clock;
-                    bool mod_exp_rst = is_rst && mod_cfg->expand_reset;
-                    bool mod_no_exp_clk = is_clk && !mod_cfg->expand_clock;
-                    bool mod_no_exp_rst = is_rst && !mod_cfg->expand_reset;
+        if (logical_port_wire->port_input && logical_port_wire->port_output) {
+            log_error("Inout port '%s' on submodule '%s' is not supported.\n",
+                      logical_port.c_str(), logical_cell_mod->name.c_str());
+        }
 
-                    // Case 1: Neither module expands, or it's an error wire
-                    if (is_err || (cell_no_exp_clk && mod_no_exp_clk) || (cell_no_exp_rst && mod_no_exp_rst)) {
-                        port_a = RTLIL::IdString(port.str());
-                        port_b = RTLIL::IdString(port.str());
-                        port_c = RTLIL::IdString(port.str());
-                        // For output clock/rst ports the submodule drives a single
-                        // signal, but the parent may have triplicated the receiving
-                        // wire (e.g. nclk_b, nclk_c). Fan out to all copies so they
-                        // are not left undriven.
-                        if (!is_err && port_wire->port_output) {
-                            mod->connect(sig_b, sig);
-                            mod->connect(sig_c, sig);
-                        }
-                        sig_b = sig;
-                        sig_c = sig;
-                    }
-                    // Case 2: Parent module expands, but submodule does not
-                    else if ((cell_no_exp_clk && mod_exp_clk) || (cell_no_exp_rst && mod_exp_rst)) {
-                        port_a = RTLIL::IdString(port.str());
-                        port_b = RTLIL::IdString(port.str());
-                        port_c = RTLIL::IdString(port.str());
-
-                        if (port_wire->port_input) {
-                            // Reduce 3 parent signals to 1 input for the submodule
-                            auto [res_v, error_v] = insert_voter(mod, {sig, sig_b, sig_c}, mod_cfg);
-                            error_signals.push_back(error_v);
-                            sig = res_v;
-                            sig_b = res_v;
-                            sig_c = res_v;
-                        } else if (port_wire->port_output) {
-                            // Fanout 1 submodule output to 3 parent signals
-                            mod->connect(sig_b, sig);
-                            mod->connect(sig_c, sig);
-                            sig_b = sig;
-                            sig_c = sig;
-                        }
-                    }
+        if (logical_port_wire->port_input) {
+            if (child_ports.shape == PortShape::Shared) {
+                if (parent_shared) {
+                    cell->setPort(child_ports.a, parent_signals.a);
+                } else {
+                    auto [voted_signal, error_signal] =
+                        insert_voter(mod, {parent_signals.a, parent_signals.b, parent_signals.c},
+                                     parent_cfg);
+                    error_signals.push_back(error_signal);
+                    cell->setPort(child_ports.a, voted_signal);
                 }
-
-        cell->setPort(port_a, sig);
-        cell->setPort(port_b, sig_b);
-        cell->setPort(port_c, sig_c);
-    }
-
-    return error_signals;
-}
-
-std::vector<RTLIL::Wire *> connect_submodules_preserver_mod_ports(
-    RTLIL::Module *mod, RTLIL::Cell *cell,
-    dict<RTLIL::SigSpec, std::pair<RTLIL::SigSpec, RTLIL::SigSpec>> wire_map, const Config *cfg) {
-    std::vector<RTLIL::Wire *> error_signals;
-    RTLIL::Design *design = mod->design;
-
-    if (!is_proper_submodule(design->module(cell->type))) {
-        return error_signals;
-    }
-
-    auto [input_ports, output_ports] = get_port_names(cell, design);
-
-    // TODO: Optimization do not insert voter if input into submodule is
-    // input into worker module
-    //
-    //
-
-    RTLIL::Module *cell_mod = design->module(cell->type);
-    if (cell_mod == nullptr) {
-        log_error("No cell mod\n");
-    }
-
-    dict<RTLIL::IdString, RTLIL::SigSpec> orig_connections;
-    for (auto &conn : cell->connections()) {
-        orig_connections[conn.first] = conn.second;
-    }
-
-    for (auto &port : cell_mod->ports) {
-        RTLIL::Wire *port_wire = cell_mod->wire(port);
-        if (orig_connections.count(port) == 0 && is_tmr_error_out_wire(port_wire, cfg)) {
-            RTLIL::Wire *err_wire = mod->addWire(NEW_ID, port_wire->width);
-            cell->setPort(port, err_wire);
-            error_signals.push_back(err_wire);
-        }
-    }
-
-    for (auto port : input_ports) {
-        RTLIL::SigSpec sig_a = cell->getPort(port);
-
-        RTLIL::SigSpec sig_b = sig_a, sig_c = sig_a;
-        for (auto &kv : wire_map) {
-            sig_b.replace(kv.first, kv.second.first);
-            sig_c.replace(kv.first, kv.second.second);
-        }
-        std::vector<RTLIL::SigSpec> inputs = {sig_a, sig_b, sig_c};
-
-        // log("Port %s sigs %i", port.c_str(), sig_a==sig_b);
-        if ((sig_a == sig_b) && (sig_a == sig_c) && (sig_b == sig_c)) {
+            } else {
+                if (parent_shared) {
+                    cell->setPort(child_ports.a, parent_signals.a);
+                    cell->setPort(child_ports.b, parent_signals.a);
+                    cell->setPort(child_ports.c, parent_signals.a);
+                } else {
+                    cell->setPort(child_ports.a, parent_signals.a);
+                    cell->setPort(child_ports.b, parent_signals.b);
+                    cell->setPort(child_ports.c, parent_signals.c);
+                }
+            }
             continue;
         }
 
-        std::pair<RTLIL::Wire *, RTLIL::Wire *> res = insert_voter(mod, inputs, cfg);
-        error_signals.push_back(res.second);
-        cell->setPort(port, res.first);
-    }
-
-    for (auto port : output_ports) {
-        RTLIL::SigSpec sig_a = cell->getPort(port);
-
-        RTLIL::SigSpec sig_b = sig_a, sig_c = sig_a;
-        for (auto &kv : wire_map) {
-            sig_b.replace(kv.first, kv.second.first);
-            sig_c.replace(kv.first, kv.second.second);
+        if (!logical_port_wire->port_output) {
+            if (port_kind == PortKind::Error) {
+                continue;
+            }
+            log_error("Port '%s' on submodule '%s' is neither input nor output.\n",
+                      logical_port.c_str(), logical_cell_mod->name.c_str());
         }
 
-        RTLIL::Wire *new_output = mod->addWire(NEW_ID, sig_a.size());
-        cell->setPort(port, new_output);
-        mod->connect(sig_a, new_output);
-        mod->connect(sig_b, new_output);
-        mod->connect(sig_c, new_output);
+        if (child_ports.shape == PortShape::Shared) {
+            RTLIL::Wire *new_output = mod->addWire(NEW_ID, orig_conn.second.size());
+            cell->setPort(child_ports.a, new_output);
+            connect_parent_destinations(mod, parent_signals, new_output);
+            continue;
+        }
+
+        if (!parent_shared) {
+            cell->setPort(child_ports.a, parent_signals.a);
+            cell->setPort(child_ports.b, parent_signals.b);
+            cell->setPort(child_ports.c, parent_signals.c);
+            continue;
+        }
+
+        RTLIL::Wire *out_a = mod->addWire(NEW_ID, orig_conn.second.size());
+        RTLIL::Wire *out_b = mod->addWire(NEW_ID, orig_conn.second.size());
+        RTLIL::Wire *out_c = mod->addWire(NEW_ID, orig_conn.second.size());
+        cell->setPort(child_ports.a, out_a);
+        cell->setPort(child_ports.b, out_b);
+        cell->setPort(child_ports.c, out_c);
+
+        auto [voted_signal, error_signal] = insert_voter(mod, {out_a, out_b, out_c}, parent_cfg);
+        error_signals.push_back(error_signal);
+        connect_parent_destinations(mod, parent_signals, voted_signal);
     }
 
     return error_signals;
@@ -357,10 +413,7 @@ void rename_wires_and_cells(RTLIL::Module *mod, std::vector<RTLIL::Wire *> wires
                             std::vector<RTLIL::Cell *> cells, std::string suffix,
                             const Config *cfg) {
     for (auto w : wires) {
-        // Skip renaming for clock/reset wires when not expanding them (both inputs AND outputs)
-        if (is_tmr_error_out_wire(w, cfg) || (cfg->preserve_module_ports && w->port_input) ||
-            (is_clk_wire(w,cfg) && !cfg->expand_clock) ||
-            (is_rst_wire(w,cfg) && !cfg->expand_reset)) {
+        if (should_keep_wire_shared(w, cfg)) {
             continue;
         }
         mod->rename(w, mod->uniquify(w->name.str() + suffix));
@@ -386,19 +439,7 @@ insert_duplicate_logic(RTLIL::Module *mod, std::vector<RTLIL::Wire *> wires,
     dict<RTLIL::Cell *, RTLIL::Cell *> flip_flop_map;
 
     for (auto w : wires) {
-
-        // Skip duplication for clock/reset wires when not expanding them
-        // This applies to BOTH input and output clock/reset ports
-        // Use is_clk_wire/is_rst_wire (same as rename_wires_and_cells) for consistency
-        if ((cfg->preserve_module_ports && w->port_input) ||
-            (is_clk_wire(w, cfg) && !cfg->expand_clock) ||
-            (is_rst_wire(w, cfg) && !cfg->expand_reset)) {
-            wire_map[w] = w;
-            continue;
-        }
-
-        // TODO: move attr to header
-        if (is_tmr_error_out_wire(w, cfg)) {
+        if (should_keep_wire_shared(w, cfg)) {
             wire_map[w] = w;
             continue;
         }
@@ -507,39 +548,16 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr,
             continue;
         }
 
-        // Fetch cell_cfg from the ORIGINAL module before any type remapping,
-        // so preserve_module_ports and other settings are correct.
-        const Config *cell_cfg = cfg_mgr->cfg(cell_mod);
+        ResolvedSubmodule submodule = resolve_submodule(mod, cell, cfg_mgr);
 
-        // If this submodule was expanded with preserve_module_ports=false a
-        // _tmrx_impl copy was created with triplicated ports. Remap the cell
-        // to that impl so the parent's triplicated wires connect correctly.
-        bool was_expanded_with_triplicated_ports = cell_mod->has_attribute(ID(tmrx_impl_module));
-        if (was_expanded_with_triplicated_ports) {
-            RTLIL::IdString impl_name = RTLIL::IdString(
-                cell_mod->get_string_attribute(ID(tmrx_impl_module)));
-            cell->type = impl_name;
-            cell_mod = mod->design->module(impl_name);
-        }
-
-        std::vector<RTLIL::Wire *> v_err_w;
-
-        // Use the voter-at-boundary path when:
-        // - preserve_module_ports=true (ports kept as-is), OR
-        // - the module was NOT expanded with triplicated ports (no _tmrx_impl):
-        //   this covers tmr_mode=None, blackboxes skipped by the main loop,
-        //   and any other case where ports were not triplicated.
-        bool use_preserve_path =
-            cell_cfg->preserve_module_ports || !was_expanded_with_triplicated_ports;
         log("    Connecting submodule '%s' (type '%s', preserve_ports=%s, expanded=%s)\n",
             cell->name.c_str(), cell->type.c_str(),
-            cell_cfg->preserve_module_ports ? "true" : "false",
-            was_expanded_with_triplicated_ports ? "true" : "false");
-        if (use_preserve_path) {
-            v_err_w = connect_submodules_preserver_mod_ports(mod, cell, combined_wire_map, cfg);
-        } else {
-            v_err_w = connect_submodules_mod_ports(mod, cell, cell_cfg, cfg, combined_wire_map);
-        }
+            submodule.child_cfg->preserve_module_ports ? "true" : "false",
+            submodule.was_expanded_with_triplicated_ports ? "true" : "false");
+
+        auto v_err_w = connect_submodule_ports(mod, cell, submodule.logical_module,
+                                               submodule.effective_module, submodule.child_cfg,
+                                               cfg, combined_wire_map);
         error_wires.insert(error_wires.end(), v_err_w.begin(), v_err_w.end());
     }
 
