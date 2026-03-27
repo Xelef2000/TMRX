@@ -2,17 +2,15 @@
 tmr_mode = "LogicTMR"
 tmr_voter = "Default"
 preserve_module_ports = true
-insert_voter_before_ff = false
-insert_voter_after_ff = true
 tmr_voter_safe_mode = false
-tmr_mode_full_module_insert_voter_before_modules = true
-tmr_mode_full_module_insert_voter_after_modules = true
-tmr_mode_full_module_insert_voter_on_clock_nets = false
-tmr_mode_full_module_insert_voter_on_reset_nets = false
 clock_port_names = ["clk_i"]
 expand_clock = false
 reset_port_names = ["rst_ni"]
 expand_reset = false
+
+[global.logic]
+insert_voter_before_ff = false
+insert_voter_after_ff = true
 ff_cells = ["DFF", "FDRE"]
 additional_ff_cells = ["FDCE"]
 excluded_ff_cells = ["FDSE"]
@@ -20,18 +18,24 @@ logic_path_1_suffix = "_a"
 logic_path_2_suffix = "_b"
 logic_path_3_suffix = "_c"
 
-[module_top_impl]
+[global.full_module]
+insert_voter_before_modules = true
+insert_voter_after_modules = true
+insert_voter_on_clock_nets = false
+insert_voter_on_reset_nets = false
+
+[module.top_impl]
 tmr_mode = @G_TMR_MODE@
 tmr_voter = "Default"
 preserve_module_ports = @G_PRESERV@
-insert_voter_before_ff = false
-insert_voter_after_ff = true
-tmr_mode_full_module_insert_voter_before_modules = true
-tmr_mode_full_module_insert_voter_after_modules = true
 clock_port_names = ["clk_i"]
 expand_clock = @G_EXPAND_CLK@
 reset_port_names = ["rst_ni"]
 expand_reset = @G_EXPAND_RST@
+
+[module.top_impl.logic]
+insert_voter_before_ff = false
+insert_voter_after_ff = true
 ff_cells = ["DFF", "FDRE"]
 additional_ff_cells = ["FDCE"]
 excluded_ff_cells = ["FDSE"]
@@ -39,18 +43,26 @@ logic_path_1_suffix = "_a"
 logic_path_2_suffix = "_b"
 logic_path_3_suffix = "_c"
 
-[module_submodule]
+[module.top_impl.full_module]
+insert_voter_before_modules = true
+insert_voter_after_modules = true
+
+[module.submodule]
 tmr_mode = @M_TMR_MODE@
 tmr_voter = "Default"
 preserve_module_ports = @M_PRESERV@
-insert_voter_before_ff = false
-insert_voter_after_ff = true
-tmr_mode_full_module_insert_voter_before_modules = true
-tmr_mode_full_module_insert_voter_after_modules = true
 clock_port_names = ["clk_i"]
 expand_clock = @M_EXPAND_CLK@
 reset_port_names = ["rst_ni"]
 expand_reset = @M_EXPAND_RST@
+
+[module.submodule.logic]
+insert_voter_before_ff = false
+insert_voter_after_ff = true
 logic_path_1_suffix = "_a"
 logic_path_2_suffix = "_b"
 logic_path_3_suffix = "_c"
+
+[module.submodule.full_module]
+insert_voter_before_modules = true
+insert_voter_after_modules = true

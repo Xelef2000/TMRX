@@ -4,8 +4,277 @@
 #include "kernel/yosys.h"
 #include "kernel/yosys_common.h"
 #include <optional>
+#include <set>
+#include <sstream>
 #include <string>
 #include <vector>
+
+namespace {
+
+const std::set<std::string> &top_level_scope_names() {
+    static const std::set<std::string> keys = {
+        "global",
+        cfg_group_scope_name,
+        cfg_module_scope_name,
+        cfg_specific_module_scope_name,
+    };
+    return keys;
+}
+
+const std::set<std::string> &scoped_config_root_keys() {
+    static const std::set<std::string> keys = {
+        "tmr_mode",
+        "tmr_voter",
+        "tmr_voter_file",
+        "tmr_voter_module",
+        "tmr_voter_clock_port_name",
+        "tmr_voter_reset_port_name",
+        "tmr_voter_clock_net",
+        "tmr_voter_reset_net",
+        "tmr_voter_safe_mode",
+        "preserve_module_ports",
+        "clock_port_names",
+        "expand_clock",
+        "reset_port_names",
+        "expand_reset",
+        "error_port_name",
+        "auto_error_port",
+        cfg_logic_scope_name,
+        cfg_full_module_scope_name,
+    };
+    return keys;
+}
+
+const std::set<std::string> &scoped_config_root_keys_with_groups() {
+    static const std::set<std::string> keys = {
+        "tmr_mode",
+        "tmr_voter",
+        "tmr_voter_file",
+        "tmr_voter_module",
+        "tmr_voter_clock_port_name",
+        "tmr_voter_reset_port_name",
+        "tmr_voter_clock_net",
+        "tmr_voter_reset_net",
+        "tmr_voter_safe_mode",
+        "preserve_module_ports",
+        "clock_port_names",
+        "expand_clock",
+        "reset_port_names",
+        "expand_reset",
+        "error_port_name",
+        "auto_error_port",
+        cfg_logic_scope_name,
+        cfg_full_module_scope_name,
+        cfg_groups_key_name,
+    };
+    return keys;
+}
+
+const std::set<std::string> &logic_config_keys() {
+    static const std::set<std::string> keys = {
+        "insert_voter_before_ff",
+        "insert_voter_after_ff",
+        "ff_cells",
+        "additional_ff_cells",
+        "excluded_ff_cells",
+        "logic_path_1_suffix",
+        "logic_path_2_suffix",
+        "logic_path_3_suffix",
+    };
+    return keys;
+}
+
+const std::set<std::string> &full_module_config_keys() {
+    static const std::set<std::string> keys = {
+        "insert_voter_before_modules",
+        "insert_voter_after_modules",
+        "insert_voter_on_clock_nets",
+        "insert_voter_on_reset_nets",
+    };
+    return keys;
+}
+
+void ensure_table(const toml::value &t, const std::string &context) {
+    if (!t.is_table()) {
+        Yosys::log_error("Config scope '%s' must be a TOML table.\n", context.c_str());
+    }
+}
+
+void validate_known_keys(const toml::value &t,
+                         const std::set<std::string> &allowed_keys,
+                         const std::string &context) {
+    ensure_table(t, context);
+
+    for (const auto &[key, value] : t.as_table()) {
+        if (allowed_keys.count(key) == 0) {
+            Yosys::log_error("Unknown config key '%s' in scope '%s'.\n",
+                             key.c_str(), context.c_str());
+        }
+        (void)value;
+    }
+}
+
+void validate_top_level_scopes(const toml::value &t) {
+    ensure_table(t, "<root>");
+
+    for (const auto &[scope_name, scope_value] : t.as_table()) {
+        if (top_level_scope_names().count(scope_name) == 0) {
+            Yosys::log_error(
+                "Unknown top-level config scope '%s'. Use [global], [group.<name>], "
+                "[module.<name>] or [specific_module.\"<name>\"].\n",
+                scope_name.c_str());
+        }
+        ensure_table(scope_value, scope_name);
+    }
+}
+
+void validate_scoped_config_table(const toml::value &t,
+                                  const std::string &context,
+                                  bool allow_groups) {
+    validate_known_keys(t,
+                        allow_groups ? scoped_config_root_keys_with_groups()
+                                     : scoped_config_root_keys(),
+                        context);
+
+    if (t.contains(cfg_logic_scope_name)) {
+        const auto &logic_table = t.at(cfg_logic_scope_name);
+        validate_known_keys(logic_table, logic_config_keys(),
+                            context + "." + cfg_logic_scope_name);
+    }
+
+    if (t.contains(cfg_full_module_scope_name)) {
+        const auto &full_module_table = t.at(cfg_full_module_scope_name);
+        validate_known_keys(full_module_table, full_module_config_keys(),
+                            context + "." + cfg_full_module_scope_name);
+    }
+}
+
+ConfigPart parse_common_config_part(const toml::value &t) {
+    ConfigPart cfg;
+
+    cfg.tmr_mode = parse_tmr_mode(toml::find_or<std::string>(t, "tmr_mode", ""));
+    cfg.tmr_voter = parse_tmr_voter(toml::find_or<std::string>(t, "tmr_voter", ""));
+
+    cfg.tmr_voter_safe_mode = toml_find_optional<bool>(t, "tmr_voter_safe_mode");
+    cfg.preserve_module_ports = toml_find_optional<bool>(t, "preserve_module_ports");
+    cfg.expand_clock = toml_find_optional<bool>(t, "expand_clock");
+    cfg.expand_reset = toml_find_optional<bool>(t, "expand_reset");
+    cfg.auto_error_port = toml_find_optional<bool>(t, "auto_error_port");
+
+    cfg.tmr_voter_file = toml_find_optional<std::string>(t, "tmr_voter_file");
+    cfg.tmr_voter_module = toml_find_optional<std::string>(t, "tmr_voter_module");
+    cfg.tmr_voter_clock_port_name = toml_find_optional<std::string>(t, "tmr_voter_clock_port_name");
+    cfg.tmr_voter_reset_port_name = toml_find_optional<std::string>(t, "tmr_voter_reset_port_name");
+    cfg.tmr_voter_clock_net = toml_find_optional<std::string>(t, "tmr_voter_clock_net");
+    cfg.tmr_voter_reset_net = toml_find_optional<std::string>(t, "tmr_voter_reset_net");
+    cfg.error_port_name = toml_find_optional<std::string>(t, "error_port_name");
+
+    cfg.clock_port_names = toml_parse_idstring_pool(t, "clock_port_names");
+    cfg.reset_port_names = toml_parse_idstring_pool(t, "reset_port_names");
+
+    return cfg;
+}
+
+ConfigPart parse_logic_config_part(const toml::value &t) {
+    ConfigPart cfg;
+
+    cfg.insert_voter_before_ff = toml_find_optional<bool>(t, "insert_voter_before_ff");
+    cfg.insert_voter_after_ff = toml_find_optional<bool>(t, "insert_voter_after_ff");
+
+    cfg.logic_path_1_suffix = toml_find_optional<std::string>(t, "logic_path_1_suffix");
+    cfg.logic_path_2_suffix = toml_find_optional<std::string>(t, "logic_path_2_suffix");
+    cfg.logic_path_3_suffix = toml_find_optional<std::string>(t, "logic_path_3_suffix");
+
+    cfg.ff_cells = toml_parse_idstring_pool(t, "ff_cells");
+    cfg.additional_ff_cells = toml_parse_idstring_pool(t, "additional_ff_cells");
+    cfg.excluded_ff_cells = toml_parse_idstring_pool(t, "excluded_ff_cells");
+
+    return cfg;
+}
+
+ConfigPart parse_full_module_config_part(const toml::value &t) {
+    ConfigPart cfg;
+
+    cfg.tmr_mode_full_module_insert_voter_before_modules =
+        toml_find_optional<bool>(t, "insert_voter_before_modules");
+    cfg.tmr_mode_full_module_insert_voter_after_modules =
+        toml_find_optional<bool>(t, "insert_voter_after_modules");
+    cfg.tmr_mode_full_module_insert_voter_on_clock_nets =
+        toml_find_optional<bool>(t, "insert_voter_on_clock_nets");
+    cfg.tmr_mode_full_module_insert_voter_on_reset_nets =
+        toml_find_optional<bool>(t, "insert_voter_on_reset_nets");
+
+    return cfg;
+}
+
+template<typename T>
+void merge_optional_field(std::optional<T> &dest, const std::optional<T> &src) {
+    if (src) {
+        dest = src;
+    }
+}
+
+void merge_config_part(ConfigPart &dest, const ConfigPart &src) {
+    merge_optional_field(dest.tmr_mode, src.tmr_mode);
+    merge_optional_field(dest.tmr_voter, src.tmr_voter);
+    merge_optional_field(dest.tmr_voter_file, src.tmr_voter_file);
+    merge_optional_field(dest.tmr_voter_module, src.tmr_voter_module);
+    merge_optional_field(dest.tmr_voter_clock_port_name, src.tmr_voter_clock_port_name);
+    merge_optional_field(dest.tmr_voter_reset_port_name, src.tmr_voter_reset_port_name);
+    merge_optional_field(dest.tmr_voter_clock_net, src.tmr_voter_clock_net);
+    merge_optional_field(dest.tmr_voter_reset_net, src.tmr_voter_reset_net);
+    merge_optional_field(dest.tmr_voter_safe_mode, src.tmr_voter_safe_mode);
+    merge_optional_field(dest.preserve_module_ports, src.preserve_module_ports);
+    merge_optional_field(dest.insert_voter_before_ff, src.insert_voter_before_ff);
+    merge_optional_field(dest.insert_voter_after_ff, src.insert_voter_after_ff);
+    merge_optional_field(dest.tmr_mode_full_module_insert_voter_before_modules,
+                         src.tmr_mode_full_module_insert_voter_before_modules);
+    merge_optional_field(dest.tmr_mode_full_module_insert_voter_after_modules,
+                         src.tmr_mode_full_module_insert_voter_after_modules);
+    merge_optional_field(dest.tmr_mode_full_module_insert_voter_on_clock_nets,
+                         src.tmr_mode_full_module_insert_voter_on_clock_nets);
+    merge_optional_field(dest.tmr_mode_full_module_insert_voter_on_reset_nets,
+                         src.tmr_mode_full_module_insert_voter_on_reset_nets);
+    merge_optional_field(dest.clock_port_names, src.clock_port_names);
+    merge_optional_field(dest.expand_clock, src.expand_clock);
+    merge_optional_field(dest.reset_port_names, src.reset_port_names);
+    merge_optional_field(dest.expand_reset, src.expand_reset);
+    merge_optional_field(dest.ff_cells, src.ff_cells);
+    merge_optional_field(dest.additional_ff_cells, src.additional_ff_cells);
+    merge_optional_field(dest.excluded_ff_cells, src.excluded_ff_cells);
+    merge_optional_field(dest.logic_path_1_suffix, src.logic_path_1_suffix);
+    merge_optional_field(dest.logic_path_2_suffix, src.logic_path_2_suffix);
+    merge_optional_field(dest.logic_path_3_suffix, src.logic_path_3_suffix);
+    merge_optional_field(dest.error_port_name, src.error_port_name);
+    merge_optional_field(dest.auto_error_port, src.auto_error_port);
+}
+
+std::vector<std::string> parse_groups(const toml::value &t) {
+    if (!t.contains(cfg_groups_key_name)) {
+        return {};
+    }
+    return toml::find<std::vector<std::string>>(t, cfg_groups_key_name);
+}
+
+void append_groups_to_assignments(
+    Yosys::dict<Yosys::RTLIL::IdString, std::vector<std::string>> &group_assignments,
+    Yosys::RTLIL::IdString mod_name,
+    const std::vector<std::string> &groups) {
+
+    for (const auto &group_name : groups) {
+        group_assignments[mod_name].push_back(group_name);
+    }
+}
+
+std::string scope_context(const std::string &scope_name, const std::string &entry_name) {
+    return scope_name + "." + entry_name;
+}
+
+std::string quoted_scope_context(const std::string &scope_name, const std::string &entry_name) {
+    return scope_name + ".\"" + entry_name + "\"";
+}
+
+} // namespace
 
 // ============================================================================
 // String conversion helpers
@@ -228,47 +497,15 @@ std::optional<std::vector<std::string>> ConfigManager::get_string_list_attr_valu
 }
 
 ConfigPart ConfigManager::parse_config(const toml::value &t) {
-    ConfigPart cfg;
+    ConfigPart cfg = parse_common_config_part(t);
 
-    // Parse enum fields
-    cfg.tmr_mode = parse_tmr_mode(toml::find_or<std::string>(t, "tmr_mode", ""));
-    cfg.tmr_voter = parse_tmr_voter(toml::find_or<std::string>(t, "tmr_voter", ""));
+    if (t.contains(cfg_logic_scope_name)) {
+        merge_config_part(cfg, parse_logic_config_part(t.at(cfg_logic_scope_name)));
+    }
 
-    // Parse boolean fields
-    cfg.tmr_voter_safe_mode = toml_find_optional<bool>(t, "tmr_voter_safe_mode");
-    cfg.preserve_module_ports = toml_find_optional<bool>(t, "preserve_module_ports");
-    cfg.insert_voter_before_ff = toml_find_optional<bool>(t, "insert_voter_before_ff");
-    cfg.insert_voter_after_ff = toml_find_optional<bool>(t, "insert_voter_after_ff");
-    cfg.tmr_mode_full_module_insert_voter_before_modules =
-        toml_find_optional<bool>(t, "tmr_mode_full_module_insert_voter_before_modules");
-    cfg.tmr_mode_full_module_insert_voter_after_modules =
-        toml_find_optional<bool>(t, "tmr_mode_full_module_insert_voter_after_modules");
-    cfg.tmr_mode_full_module_insert_voter_on_clock_nets =
-        toml_find_optional<bool>(t, "tmr_mode_full_module_insert_voter_on_clock_nets");
-    cfg.tmr_mode_full_module_insert_voter_on_reset_nets =
-        toml_find_optional<bool>(t, "tmr_mode_full_module_insert_voter_on_reset_nets");
-    cfg.expand_clock = toml_find_optional<bool>(t, "expand_clock");
-    cfg.expand_reset = toml_find_optional<bool>(t, "expand_reset");
-
-    // Parse string fields
-    cfg.tmr_voter_file             = toml_find_optional<std::string>(t, "tmr_voter_file");
-    cfg.tmr_voter_module           = toml_find_optional<std::string>(t, "tmr_voter_module");
-    cfg.tmr_voter_clock_port_name  = toml_find_optional<std::string>(t, "tmr_voter_clock_port_name");
-    cfg.tmr_voter_reset_port_name  = toml_find_optional<std::string>(t, "tmr_voter_reset_port_name");
-    cfg.tmr_voter_clock_net        = toml_find_optional<std::string>(t, "tmr_voter_clock_net");
-    cfg.tmr_voter_reset_net        = toml_find_optional<std::string>(t, "tmr_voter_reset_net");
-    cfg.logic_path_1_suffix = toml_find_optional<std::string>(t, "logic_path_1_suffix");
-    cfg.logic_path_2_suffix = toml_find_optional<std::string>(t, "logic_path_2_suffix");
-    cfg.logic_path_3_suffix = toml_find_optional<std::string>(t, "logic_path_3_suffix");
-    cfg.error_port_name     = toml_find_optional<std::string>(t, "error_port_name");
-    cfg.auto_error_port     = toml_find_optional<bool>(t, "auto_error_port");
-
-    // Parse IdString pool fields
-    cfg.clock_port_names = toml_parse_idstring_pool(t, "clock_port_names");
-    cfg.reset_port_names = toml_parse_idstring_pool(t, "reset_port_names");
-    cfg.ff_cells = toml_parse_idstring_pool(t, "ff_cells");
-    cfg.additional_ff_cells = toml_parse_idstring_pool(t, "additional_ff_cells");
-    cfg.excluded_ff_cells = toml_parse_idstring_pool(t, "excluded_ff_cells");
+    if (t.contains(cfg_full_module_scope_name)) {
+        merge_config_part(cfg, parse_full_module_config_part(t.at(cfg_full_module_scope_name)));
+    }
 
     return cfg;
 }
@@ -548,19 +785,19 @@ void ConfigManager::validate_cfg(Yosys::RTLIL::Design *design) {
         if (c.tmr_mode != TmrMode::FullModuleTMR) {
             if (c.tmr_mode_full_module_insert_voter_before_modules)
                 Yosys::log_warning(
-                    "Module '%s': tmr_mode_full_module_insert_voter_before_modules has no effect "
+                    "Module '%s': full_module.insert_voter_before_modules has no effect "
                     "outside of FullModuleTMR mode.\n", mod);
             if (c.tmr_mode_full_module_insert_voter_after_modules)
                 Yosys::log_warning(
-                    "Module '%s': tmr_mode_full_module_insert_voter_after_modules has no effect "
+                    "Module '%s': full_module.insert_voter_after_modules has no effect "
                     "outside of FullModuleTMR mode.\n", mod);
             if (c.tmr_mode_full_module_insert_voter_on_clock_nets)
                 Yosys::log_warning(
-                    "Module '%s': tmr_mode_full_module_insert_voter_on_clock_nets has no effect "
+                    "Module '%s': full_module.insert_voter_on_clock_nets has no effect "
                     "outside of FullModuleTMR mode.\n", mod);
             if (c.tmr_mode_full_module_insert_voter_on_reset_nets)
                 Yosys::log_warning(
-                    "Module '%s': tmr_mode_full_module_insert_voter_on_reset_nets has no effect "
+                    "Module '%s': full_module.insert_voter_on_reset_nets has no effect "
                     "outside of FullModuleTMR mode.\n", mod);
         }
 
@@ -581,22 +818,22 @@ void ConfigManager::validate_cfg(Yosys::RTLIL::Design *design) {
         if (c.tmr_mode == TmrMode::FullModuleTMR) {
             if (c.tmr_mode_full_module_insert_voter_on_clock_nets && !c.expand_clock)
                 Yosys::log_warning(
-                    "Module '%s': tmr_mode_full_module_insert_voter_on_clock_nets is true but "
+                    "Module '%s': full_module.insert_voter_on_clock_nets is true but "
                     "expand_clock is false — the flag has no effect.\n", mod);
             if (c.tmr_mode_full_module_insert_voter_on_reset_nets && !c.expand_reset)
                 Yosys::log_warning(
-                    "Module '%s': tmr_mode_full_module_insert_voter_on_reset_nets is true but "
+                    "Module '%s': full_module.insert_voter_on_reset_nets is true but "
                     "expand_reset is false — the flag has no effect.\n", mod);
 
             // Check 10: both flags set — voters WILL be placed on the clock/reset net.
             if (c.tmr_mode_full_module_insert_voter_on_clock_nets && c.expand_clock)
                 Yosys::log_warning(
-                    "Module '%s': tmr_mode_full_module_insert_voter_on_clock_nets and "
+                    "Module '%s': full_module.insert_voter_on_clock_nets and "
                     "expand_clock are both enabled. Voters will be inserted on the clock net.\n",
                     mod);
             if (c.tmr_mode_full_module_insert_voter_on_reset_nets && c.expand_reset)
                 Yosys::log_warning(
-                    "Module '%s': tmr_mode_full_module_insert_voter_on_reset_nets and "
+                    "Module '%s': full_module.insert_voter_on_reset_nets and "
                     "expand_reset are both enabled. Voters will be inserted on the reset net.\n",
                     mod);
         }
@@ -641,34 +878,67 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
     }
 
     ConfigPart global_config_part;
-    if (loaded_cfg && t.contains("global")) {
-        global_config_part = parse_config(t.at("global"));
-        global_cfg = assemble_config({global_config_part}, global_cfg);
-    }
-
-    if (loaded_cfg) {
-        for (auto &[table_name, table_value] : t.as_table()) {
-            if (table_name == "global" || table_name == "module_groups") {
-                continue;
-            }
-
-            if (table_name.rfind(cfg_group_prefix, 0) == 0) {
-                group_cfg[table_name.substr(cfg_group_prefix.size())] =
-                    parse_config(table_value);
-            }
-        }
-    }
-
-
-
     Yosys::dict<Yosys::RTLIL::IdString, std::vector<std::string>> group_assignments;
 
-    if (loaded_cfg && t.contains("module_groups")) {
-        const auto &module_groups_table = toml::get<toml::value>(t.at("module_groups"));
+    if (loaded_cfg) {
+        validate_top_level_scopes(t);
 
-        for (auto &[mod_name, group_value] : module_groups_table.as_table()) {
-            std::string group_name = toml::get<std::string>(group_value);
-            group_assignments["\\" + mod_name].push_back(group_name);
+        if (t.contains("global")) {
+            const auto &global_table = t.at("global");
+            validate_scoped_config_table(global_table, "global", false);
+            global_config_part = parse_config(global_table);
+            global_cfg = assemble_config({global_config_part}, global_cfg);
+        }
+
+        if (t.contains(cfg_group_scope_name)) {
+            const auto &group_root = t.at(cfg_group_scope_name);
+            ensure_table(group_root, cfg_group_scope_name);
+
+            for (const auto &[group_name, group_value] : group_root.as_table()) {
+                validate_scoped_config_table(group_value,
+                                             scope_context(cfg_group_scope_name, group_name),
+                                             false);
+                group_cfg[group_name] = parse_config(group_value);
+            }
+        }
+
+        if (t.contains(cfg_module_scope_name)) {
+            const auto &module_root = t.at(cfg_module_scope_name);
+            ensure_table(module_root, cfg_module_scope_name);
+
+            for (const auto &[module_name, module_value] : module_root.as_table()) {
+                validate_scoped_config_table(module_value,
+                                             scope_context(cfg_module_scope_name, module_name),
+                                             true);
+
+                Yosys::RTLIL::IdString module_id("\\" + module_name);
+                append_groups_to_assignments(group_assignments, module_id,
+                                             parse_groups(module_value));
+                module_cfgs[module_id] = parse_config(module_value);
+            }
+        }
+
+        if (t.contains(cfg_specific_module_scope_name)) {
+            const auto &specific_module_root = t.at(cfg_specific_module_scope_name);
+            ensure_table(specific_module_root, cfg_specific_module_scope_name);
+
+            for (const auto &[module_name, module_value] : specific_module_root.as_table()) {
+                if (module_name.find('$') == std::string::npos) {
+                    Yosys::log_error(
+                        "Specific module configurations require a '$' in the name. "
+                        "Use [module.<name>] for generic module configuration.\n");
+                }
+
+                validate_scoped_config_table(module_value,
+                                             quoted_scope_context(cfg_specific_module_scope_name,
+                                                                  module_name),
+                                             true);
+
+                Yosys::RTLIL::IdString module_id("\\" + module_name);
+                append_groups_to_assignments(group_assignments, module_id,
+                                             parse_groups(module_value));
+                specific_module_cfgs[module_id] = parse_config(module_value);
+            }
         }
     }
 
@@ -700,41 +970,6 @@ ConfigManager::ConfigManager(Yosys::RTLIL::Design *design, const std::string &cf
 
         // Yosys::log_header(design, "creating id string");
         module_attr_cfgs[mod_name] = parse_module_annotations(module);
-    }
-
-    // TODO: add automatic top module detection
-    // TODO: prevent overwriting of black box
-    if (loaded_cfg) {
-        for (auto &[table_name, table_value] : t.as_table()) {
-            if (table_name == "global" || table_name == "module_groups") {
-                continue;
-            }
-
-
-            if (table_name.rfind(cfg_specific_module_prefix, 0) == 0) {
-                if (table_name.find('$') == std::string::npos) {
-                    Yosys::log_error("Specific module configurations are for readslangs auto uniquified module names, use module config\n");
-                }
-
-                specific_module_cfgs["\\" + table_name.substr(cfg_specific_module_prefix.size())] =
-                    parse_config(table_value);
-            }
-        }
-    }
-
-    if (loaded_cfg) {
-        for (auto &[table_name, table_value] : t.as_table()) {
-            if (table_name == "global" || table_name == "module_groups") {
-                continue;
-            }
-
-
-            if ((table_name.rfind(cfg_module_prefix, 0) == 0) && !(table_name.rfind(cfg_specific_module_prefix, 0) == 0)){
-
-                module_cfgs["\\" + table_name.substr(cfg_module_prefix.size())] =
-                    parse_config(table_value);
-            }
-        }
     }
 
     for (auto module : design->modules()) {
@@ -809,15 +1044,15 @@ std::string ConfigManager::cfg_as_string(Yosys::RTLIL::Module *mod) const {
     }
     ret += "TMR-Voter Safe Mode: " + bool_to_string(c->tmr_voter_safe_mode) + "\n";
     ret += "Preserve Mod Ports: " + bool_to_string(c->preserve_module_ports) + "\n";
-    ret += "Insert Voter before ff: " + bool_to_string(c->insert_voter_before_ff) + "\n";
-    ret += "Insert Voter after ff: " + bool_to_string(c->insert_voter_after_ff) + "\n";
-    ret += "Tmr Mode full; insert voter before module: " +
+    ret += "Logic.insert_voter_before_ff: " + bool_to_string(c->insert_voter_before_ff) + "\n";
+    ret += "Logic.insert_voter_after_ff: " + bool_to_string(c->insert_voter_after_ff) + "\n";
+    ret += "Full Module.insert_voter_before_modules: " +
            bool_to_string(c->tmr_mode_full_module_insert_voter_before_modules) + "\n";
-    ret += "Tmr Mode full; insert voter after module: " +
+    ret += "Full Module.insert_voter_after_modules: " +
            bool_to_string(c->tmr_mode_full_module_insert_voter_after_modules) + "\n";
-    ret += "Tmr Mode full; insert voter on clock nets: " +
+    ret += "Full Module.insert_voter_on_clock_nets: " +
            bool_to_string(c->tmr_mode_full_module_insert_voter_on_clock_nets) + "\n";
-    ret += "Tmr Mode full; insert voter on reset nets: " +
+    ret += "Full Module.insert_voter_on_reset_nets: " +
            bool_to_string(c->tmr_mode_full_module_insert_voter_on_reset_nets) + "\n";
     ret += "Clock port names: " + pool_to_string(c->clock_port_names) + "\n";
     ret += "Expand Clock net: " + bool_to_string(c->expand_clock) + "\n";
@@ -826,9 +1061,9 @@ std::string ConfigManager::cfg_as_string(Yosys::RTLIL::Module *mod) const {
     ret += "FF Cells: " + pool_to_string(c->ff_cells) + "\n";
     ret += "Additional FF Cells: " + pool_to_string(c->additional_ff_cells) + "\n";
     ret += "Excluded FF Cells: " + pool_to_string(c->excluded_ff_cells) + "\n";
-    ret += "Logic path 1 suffix: " + c->logic_path_1_suffix + "\n";
-    ret += "Logic path 2 suffix: " + c->logic_path_2_suffix + "\n";
-    ret += "Logic path 3 suffix: " + c->logic_path_3_suffix + "\n";
+    ret += "Logic.logic_path_1_suffix: " + c->logic_path_1_suffix + "\n";
+    ret += "Logic.logic_path_2_suffix: " + c->logic_path_2_suffix + "\n";
+    ret += "Logic.logic_path_3_suffix: " + c->logic_path_3_suffix + "\n";
     if (!c->error_port_name.empty())
         ret += "Error port name: " + c->error_port_name + "\n";
     ret += "Auto error port: " + bool_to_string(c->auto_error_port) + "\n";

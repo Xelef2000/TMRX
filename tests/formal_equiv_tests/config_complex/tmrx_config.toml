@@ -5,30 +5,34 @@
 tmr_mode = "LogicTMR"
 tmr_voter = "Default"
 preserve_module_ports = false
-insert_voter_before_ff = false
-insert_voter_after_ff = true
 clock_port_names = ["clk_i"]
 expand_clock = false
 reset_port_names = ["rst_ni"]
 expand_reset = false
+
+[global.logic]
+insert_voter_before_ff = false
+insert_voter_after_ff = true
 logic_path_1_suffix = "_a"
 logic_path_2_suffix = "_b"
 logic_path_3_suffix = "_c"
 
-[module_top]
+[module.top]
 preserve_module_ports = true
 
-[module_groups]
-mod1 = "groupA"
-mod2 = "groupB"
-
-[groupA]
+[group.logic_bias]
 tmr_mode = "LogicTMR"
-insert_voter_before_ff = true
 
-[groupB]
+[group.logic_bias.logic]
+insert_voter_after_ff = true
+
+[group.clock_clean]
 tmr_voter = "Default"
 expand_clock = false
 
-[module_mod1]
+[module.submodule_1]
+groups = ["logic_bias", "clock_clean"]
 tmr_mode = "None"
+
+[module.submodule_2]
+groups = ["clock_clean"]

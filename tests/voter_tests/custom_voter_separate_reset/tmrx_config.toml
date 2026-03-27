@@ -10,16 +10,20 @@ tmr_voter_reset_port_name = "rst_ni"
 tmr_voter_reset_net = "voter_rst_ni"
 tmr_voter_safe_mode = false
 preserve_module_ports = true
-insert_voter_before_ff = false
-insert_voter_after_ff = true
-tmr_mode_full_module_insert_voter_before_modules = false
-tmr_mode_full_module_insert_voter_after_modules = true
-tmr_mode_full_module_insert_voter_on_clock_nets = false
-tmr_mode_full_module_insert_voter_on_reset_nets = false
 clock_port_names = ["clk_i"]
 expand_clock = false
 reset_port_names = ["rst_ni", "voter_rst_ni"]
 expand_reset = false
+
+[global.logic]
+insert_voter_before_ff = false
+insert_voter_after_ff = true
 logic_path_1_suffix = "_a"
 logic_path_2_suffix = "_b"
 logic_path_3_suffix = "_c"
+
+[global.full_module]
+insert_voter_before_modules = false
+insert_voter_after_modules = true
+insert_voter_on_clock_nets = false
+insert_voter_on_reset_nets = false

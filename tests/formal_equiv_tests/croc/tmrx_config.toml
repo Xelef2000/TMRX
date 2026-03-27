@@ -4,23 +4,27 @@ tmr_mode = "LogicTMR"
 tmr_voter = "Default"
 preserve_module_ports = false
 tmr_voter_safe_mode = false
-insert_voter_before_ff = false
-insert_voter_after_ff = true
-tmr_mode_full_module_insert_voter_before_modules = true
-tmr_mode_full_module_insert_voter_after_modules = true
 clock_port_names = ["clk_i"]
 expand_clock = false
 reset_port_names = ["rst_ni"]
 expand_reset = false
+
+[global.logic]
+insert_voter_before_ff = false
+insert_voter_after_ff = true
 logic_path_1_suffix = "_a"
 logic_path_2_suffix = "_b"
 logic_path_3_suffix = "_c"
+
+[global.full_module]
+insert_voter_before_modules = true
+insert_voter_after_modules = true
 
 # tc_sram_impl uses an abstract stub in formal (see tc_sram_impl_stub.sv).
 # FullModuleTMR would create three stub instances, which is valid but
 # unnecessary: both gold and gate use the same stub, so the OBI interface
 # is covered by the croc_soc equivalence check regardless.
-[module_tc_sram_impl]
+[module.tc_sram_impl]
 tmr_mode = "None"
 
 # ---------------------------------------------------------------------------
@@ -48,7 +52,7 @@ tmr_mode = "None"
 # and must never be replicated by LogicTMR; any TMR on clock paths is handled
 # at the module boundary level, not inside the cell.
 # ---------------------------------------------------------------------------
-[groupclock_cells]
+[group.clock_cells]
 tmr_mode = "None"
 preserve_module_ports = true
 
@@ -63,7 +67,7 @@ preserve_module_ports = true
 # Clock hardening is better addressed through layout shielding or a
 # cold-standby / glitch-free mux strategy, not output voting.
 # ---------------------------------------------------------------------------
-[groupclock_gen]
+[group.clock_gen]
 tmr_mode = "None"
 preserve_module_ports = true
 
@@ -75,7 +79,7 @@ preserve_module_ports = true
 # TMR pattern: all three copies deassert in the same clock cycle under normal
 # operation, and the voter masks a single-copy fault.
 # ---------------------------------------------------------------------------
-[groupreset_gen]
+[group.reset_gen]
 tmr_mode = "FullModuleTMR"
 
 # ---------------------------------------------------------------------------
@@ -85,7 +89,7 @@ tmr_mode = "FullModuleTMR"
 # cdc_outermost: directly instantiated from non-CDC RTL.  FullModuleTMR
 # creates three independent CDC paths (one per TMR copy) with a voter on the
 # outputs.
-[groupcdc_outermost]
+[group.cdc_outermost]
 tmr_mode = "FullModuleTMR"
 
 # cdc_internal: only ever instantiated inside other CDC modules.  Set to None
@@ -103,7 +107,7 @@ tmr_mode = "FullModuleTMR"
 # When a LogicTMR parent (e.g. gpio, clint, uart_rx) instantiates sync, TMRX
 # treats it as a "preserver" submodule: it inserts a voter on the input and
 # fans the single output to all three triplicated branches.
-[groupcdc_internal]
+[group.cdc_internal]
 tmr_mode = "None"
 preserve_module_ports = true
 
@@ -121,110 +125,193 @@ preserve_module_ports = true
 # cdc_outermost (FullModuleTMR) behaviour for that bridge automatically,
 # since a module with no group entry falls back through the precedence chain.
 #
-# To re-enable TMR on the entire JTAG subsystem, comment out [groupjtag_debug]
-# and all jtag_debug assignments in [module_groups] below.
+# To re-enable TMR on the entire JTAG subsystem, comment out [group.jtag_debug]
+# and the `groups = ["jtag_debug"]` assignments below.
 # ---------------------------------------------------------------------------
-[groupjtag_debug]
+[group.jtag_debug]
 tmr_mode = "None"
 preserve_module_ports = true
 
 # ---------------------------------------------------------------------------
 # Module → group assignments.
 # ---------------------------------------------------------------------------
-[module_groups]
+
 # --- Technology clock cells (None, ports preserved) ---
-tc_clk_and2     = "clock_cells"
-tc_clk_buffer   = "clock_cells"
-tc_clk_gating   = "clock_cells"
-tc_clk_inverter = "clock_cells"
-tc_clk_mux2     = "clock_cells"
-tc_clk_xor2     = "clock_cells"
-tc_clk_or2      = "clock_cells"
-tc_clk_delay    = "clock_cells"
+[module.tc_clk_and2]
+groups = ["clock_cells"]
+
+[module.tc_clk_buffer]
+groups = ["clock_cells"]
+
+[module.tc_clk_gating]
+groups = ["clock_cells"]
+
+[module.tc_clk_inverter]
+groups = ["clock_cells"]
+
+[module.tc_clk_mux2]
+groups = ["clock_cells"]
+
+[module.tc_clk_xor2]
+groups = ["clock_cells"]
+
+[module.tc_clk_or2]
+groups = ["clock_cells"]
+
+[module.tc_clk_delay]
+groups = ["clock_cells"]
 
 # --- Clock generation (None — voter on clk_o would violate clock rules) ---
-clk_int_div        = "clock_gen"  # runtime-configurable integer divider
-clk_int_div_static = "clock_gen"  # static wrapper around clk_int_div
-clk_mux_glitch_free = "clock_gen" # N-input glitch-free clock mux + OR tree
+[module.clk_int_div]
+groups = ["clock_gen"]
+
+[module.clk_int_div_static]
+groups = ["clock_gen"]
+
+[module.clk_mux_glitch_free]
+groups = ["clock_gen"]
 
 # --- Reset generation (FullModuleTMR) ---
-rstgen        = "reset_gen"  # reset synchroniser (wrapper)
-rstgen_bypass = "reset_gen"  # reset synchroniser with test-mode bypass
+[module.rstgen]
+groups = ["reset_gen"]
+
+[module.rstgen_bypass]
+groups = ["reset_gen"]
 
 # --- CDC: outermost crossing boundary (FullModuleTMR) ---
 # (dmi_cdc is assigned under jtag_debug below; re-assign here if that
 #  section is commented out and CDC TMR on the JTAG bridge is desired)
 
 # --- CDC: internal sub-modules (None, ports preserved) ---
-sync                     = "cdc_internal"
-sync_wedge               = "cdc_internal"
-cdc_2phase               = "cdc_internal"
-cdc_2phase_src           = "cdc_internal"
-cdc_2phase_dst           = "cdc_internal"
-cdc_2phase_clearable     = "cdc_internal"
-cdc_2phase_src_clearable = "cdc_internal"
-cdc_2phase_dst_clearable = "cdc_internal"
-cdc_4phase               = "cdc_internal"
-cdc_4phase_src           = "cdc_internal"
-cdc_4phase_dst           = "cdc_internal"
-cdc_fifo_2phase          = "cdc_internal"
-cdc_fifo_gray            = "cdc_internal"
-cdc_fifo_gray_clearable  = "cdc_internal"
-cdc_reset_ctrlr          = "cdc_internal"
-cdc_reset_ctrlr_half     = "cdc_internal"
-edge_propagator          = "cdc_internal"
-edge_propagator_ack      = "cdc_internal"
-edge_propagator_tx       = "cdc_internal"
-edge_propagator_rx       = "cdc_internal"
+[module.sync]
+groups = ["cdc_internal"]
+
+[module.sync_wedge]
+groups = ["cdc_internal"]
+
+[module.cdc_2phase]
+groups = ["cdc_internal"]
+
+[module.cdc_2phase_src]
+groups = ["cdc_internal"]
+
+[module.cdc_2phase_dst]
+groups = ["cdc_internal"]
+
+[module.cdc_2phase_clearable]
+groups = ["cdc_internal"]
+
+[module.cdc_2phase_src_clearable]
+groups = ["cdc_internal"]
+
+[module.cdc_2phase_dst_clearable]
+groups = ["cdc_internal"]
+
+[module.cdc_4phase]
+groups = ["cdc_internal"]
+
+[module.cdc_4phase_src]
+groups = ["cdc_internal"]
+
+[module.cdc_4phase_dst]
+groups = ["cdc_internal"]
+
+[module.cdc_fifo_2phase]
+groups = ["cdc_internal"]
+
+[module.cdc_fifo_gray]
+groups = ["cdc_internal"]
+
+[module.cdc_fifo_gray_clearable]
+groups = ["cdc_internal"]
+
+[module.cdc_reset_ctrlr]
+groups = ["cdc_internal"]
+
+[module.cdc_reset_ctrlr_half]
+groups = ["cdc_internal"]
+
+[module.edge_propagator]
+groups = ["cdc_internal"]
+
+[module.edge_propagator_ack]
+groups = ["cdc_internal"]
+
+[module.edge_propagator_tx]
+groups = ["cdc_internal"]
+
+[module.edge_propagator_rx]
+groups = ["cdc_internal"]
 
 # --- JTAG debug subsystem (None) ---
-# Comment out [groupjtag_debug] above and these lines to apply global TMR.
-dmi_cdc               = "jtag_debug"  # CDC bridge for JTAG↔core; part of debug path
-dmi_jtag              = "jtag_debug"  # top-level JTAG DMI wrapper
-dmi_jtag_tap          = "jtag_debug"  # JTAG TAP controller (TCK domain)
-dm_top                = "jtag_debug"  # debug module top
-dm_csrs               = "jtag_debug"  # debug module control/status registers
-dm_mem                = "jtag_debug"  # debug module program buffer / abstract memory
-dm_sba                = "jtag_debug"  # debug module system bus access
-dm_obi_top            = "jtag_debug"  # OBI bus adapter for the debug module
-debug_rom             = "jtag_debug"  # debug ROM (halt/resume trampoline)
-debug_rom_one_scratch = "jtag_debug"  # debug ROM variant with one scratch register
-fifo_v3               = "jtag_debug"  # parameterized FIFO used inside dm_csrs
+# Comment out [group.jtag_debug] above and these assignments to apply global TMR.
+[module.dmi_cdc]
+groups = ["jtag_debug"]
 
-[module_croc_chip]
+[module.dmi_jtag]
+groups = ["jtag_debug"]
+
+[module.dmi_jtag_tap]
+groups = ["jtag_debug"]
+
+[module.dm_top]
+groups = ["jtag_debug"]
+
+[module.dm_csrs]
+groups = ["jtag_debug"]
+
+[module.dm_mem]
+groups = ["jtag_debug"]
+
+[module.dm_sba]
+groups = ["jtag_debug"]
+
+[module.dm_obi_top]
+groups = ["jtag_debug"]
+
+[module.debug_rom]
+groups = ["jtag_debug"]
+
+[module.debug_rom_one_scratch]
+groups = ["jtag_debug"]
+
+[module.fifo_v3]
+groups = ["jtag_debug"]
+
+[module.croc_chip]
 tmr_mode = "None"
 preserve_module_ports = true
 
-[module_croc_soc]
+[module.croc_soc]
 preserve_module_ports = true
 
 # IHP IO pad cells are blackboxes (from liberty) so they get FullModuleTMR by
 # default from the black_box_module group. Override to None since they are
 # boundary cells that must not be triplicated.
-[module_sg13g2_IOPadIn]
+[module.sg13g2_IOPadIn]
 tmr_mode = "None"
 
-[module_sg13g2_IOPadInOut30mA]
+[module.sg13g2_IOPadInOut30mA]
 tmr_mode = "None"
 
-[module_sg13g2_IOPadOut16mA]
+[module.sg13g2_IOPadOut16mA]
 tmr_mode = "None"
 
-[module_sg13g2_IOPadOut4mA]
+[module.sg13g2_IOPadOut4mA]
 tmr_mode = "None"
 
-[module_sg13g2_IOPadVdd]
+[module.sg13g2_IOPadVdd]
 tmr_mode = "None"
 
-[module_sg13g2_IOPadVss]
+[module.sg13g2_IOPadVss]
 tmr_mode = "None"
 
-[module_sg13g2_IOPadIOVdd]
+[module.sg13g2_IOPadIOVdd]
 tmr_mode = "None"
 
-[module_sg13g2_IOPadIOVss]
+[module.sg13g2_IOPadIOVss]
 tmr_mode = "None"
 
-[module_sg13g2_mux2_1]
+[module.sg13g2_mux2_1]
 tmr_mode = "None"
 preserve_module_ports = true
