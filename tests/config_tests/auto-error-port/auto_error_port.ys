@@ -1,0 +1,20 @@
+# Test: auto_error_port creates tmrx_err_o when no error sink is annotated.
+#
+# The top module has no (* tmrx_error_sink *) wire.  With auto_error_port = true
+# in the config, TMRX must synthesise a new output port named tmrx_err_o and
+# connect the aggregated voter error signals to it.
+
+read_verilog top.v
+hierarchy -check -top top
+proc; opt
+
+tmrx_mark
+tmrx -c tmrx_config.toml
+
+# Assert that exactly one wire named tmrx_err_o now exists in the top module.
+select -assert-count 1 top/w:tmrx_err_o
+
+# Assert it is an output port.
+select -assert-count 1 top/o:tmrx_err_o
+
+write_verilog -noattr auto_error_port_out.v
