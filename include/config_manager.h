@@ -45,6 +45,7 @@ const std::string cfg_expand_rst_attr_name = "\\tmrx_expand_rst";
 const std::string cfg_logic_path_1_suffix_attr_name = "\\tmrx_logic_path_1_suffix";
 const std::string cfg_logic_path_2_suffix_attr_name = "\\tmrx_logic_path_2_suffix";
 const std::string cfg_logic_path_3_suffix_attr_name = "\\tmrx_logic_path_3_suffix";
+const std::string cfg_error_port_name_attr_name = "\\tmrx_error_port_name";
 
 const auto ATTRIBUTE_IS_PROPER_SUBMODULE = ID(tmrx_is_proper_submodule);
 
@@ -114,6 +115,11 @@ struct Config {
     std::string logic_path_1_suffix;
     std::string logic_path_2_suffix;
     std::string logic_path_3_suffix;
+
+    // Name of the output port that collects aggregated voter error signals.
+    // Overrides (or supplements) the per-wire `(* tmrx_error_sink *)` attribute.
+    // Empty string means "use attribute only".
+    std::string error_port_name;
 };
 
 struct ConfigPart {
@@ -153,6 +159,8 @@ struct ConfigPart {
     std::optional<std::string> logic_path_1_suffix;
     std::optional<std::string> logic_path_2_suffix;
     std::optional<std::string> logic_path_3_suffix;
+
+    std::optional<std::string> error_port_name;
 };
 
 struct ConfigManager {

@@ -75,7 +75,7 @@ void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
             }
             bool ignore_wire = (is_clk_wire(w, cfg) && !cfg->expand_clock) ||
                                (is_rst_wire(w, cfg) && !cfg->expand_reset) ||
-                               is_tmr_error_out_wire(w);
+                               is_tmr_error_out_wire(w, cfg);
 
             if ((cfg->preserve_module_ports || ignore_wire) && i > 0) {
                 wire_map[w].push_back(wire_map.at(w).at(0));
@@ -112,7 +112,7 @@ void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
             cell_ports.at(i)[(w)] = w_con;
             cell->setPort(w->name, w_con);
 
-            if (is_tmr_error_out_wire(w)) {
+            if (is_tmr_error_out_wire(w, cfg)) {
                 error_wires.push_back(w_con);
             }
         }
@@ -142,7 +142,7 @@ void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
 
     if (cfg->tmr_mode_full_module_insert_voter_after_modules && !cfg->preserve_module_ports) {
         for (auto wm : wire_map) {
-            if (!wm.first->port_output || is_tmr_error_out_wire(wm.first) ||
+            if (!wm.first->port_output || is_tmr_error_out_wire(wm.first, cfg) ||
                 (is_clk_wire(wm.first, cfg) && !cfg->expand_clock) ||
                 (is_rst_wire(wm.first, cfg) && !cfg->expand_reset) ||
                 (is_clk_wire(wm.first, cfg) && !cfg->tmr_mode_full_module_insert_voter_on_clock_nets) ||
@@ -171,7 +171,7 @@ void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
     if (cfg->preserve_module_ports || !cfg->expand_clock || !cfg->expand_reset) {
         for (auto wm : wire_map) {
             if (!wm.first->port_output) continue;
-            if (is_tmr_error_out_wire(wm.first)) continue;
+            if (is_tmr_error_out_wire(wm.first, cfg)) continue;
             if (!cfg->preserve_module_ports && is_clk_wire(wm.first, cfg) && cfg->expand_clock) continue;
             if (!cfg->preserve_module_ports && is_rst_wire(wm.first, cfg) && cfg->expand_reset) continue;
             if (!cfg->preserve_module_ports && !is_clk_wire(wm.first, cfg) && !is_rst_wire(wm.first, cfg)) continue;
@@ -191,14 +191,14 @@ void full_module_tmr_expansion(RTLIL::Module *mod, const Config *cfg) {
 
     for (size_t i = 0; i < 3; i++) {
         for (auto wm : wire_map) {
-            if (is_tmr_error_out_wire(wm.first)) {
+            if (is_tmr_error_out_wire(wm.first, cfg)) {
                 continue;
             }
             wrapper->connect(wm.second.at(i), cell_ports.at(i).at(wm.first));
         }
     }
 
-    connect_error_signal(wrapper, error_wires);
+    connect_error_signal(wrapper, error_wires, cfg);
 
     // Create one uniquified worker clone per TMR path and recursively uniquify
     // all proper submodule cells within each clone so that the three workers

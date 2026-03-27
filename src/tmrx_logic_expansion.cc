@@ -118,7 +118,7 @@ std::vector<RTLIL::Wire *> connect_submodules_mod_ports(
 
     for (auto &port : cell_mod->ports) {
         RTLIL::Wire *port_wire = cell_mod->wire(port);
-        if (orig_connections.count(port) == 0 && is_tmr_error_out_wire(port_wire)) {
+        if (orig_connections.count(port) == 0 && is_tmr_error_out_wire(port_wire, cell_cfg)) {
             RTLIL::Wire *err_wire = mod->addWire(NEW_ID, port_wire->width);
             cell->setPort(port, err_wire);
             error_signals.push_back(err_wire);
@@ -145,7 +145,7 @@ std::vector<RTLIL::Wire *> connect_submodules_mod_ports(
         if (port_wire != nullptr) {
                     bool is_clk = is_clk_wire(port_wire, cell_cfg);
                     bool is_rst = is_rst_wire(port_wire, cell_cfg);
-                    bool is_err = is_tmr_error_out_wire(port_wire);
+                    bool is_err = is_tmr_error_out_wire(port_wire, cell_cfg);
 
                     bool cell_no_exp_clk = is_clk && !cell_cfg->expand_clock;
                     bool cell_no_exp_rst = is_rst && !cell_cfg->expand_reset;
@@ -230,7 +230,7 @@ std::vector<RTLIL::Wire *> connect_submodules_preserver_mod_ports(
 
     for (auto &port : cell_mod->ports) {
         RTLIL::Wire *port_wire = cell_mod->wire(port);
-        if (orig_connections.count(port) == 0 && is_tmr_error_out_wire(port_wire)) {
+        if (orig_connections.count(port) == 0 && is_tmr_error_out_wire(port_wire, cfg)) {
             RTLIL::Wire *err_wire = mod->addWire(NEW_ID, port_wire->width);
             cell->setPort(port, err_wire);
             error_signals.push_back(err_wire);
@@ -358,7 +358,7 @@ void rename_wires_and_cells(RTLIL::Module *mod, std::vector<RTLIL::Wire *> wires
                             const Config *cfg) {
     for (auto w : wires) {
         // Skip renaming for clock/reset wires when not expanding them (both inputs AND outputs)
-        if (is_tmr_error_out_wire(w) || (cfg->preserve_module_ports && w->port_input) ||
+        if (is_tmr_error_out_wire(w, cfg) || (cfg->preserve_module_ports && w->port_input) ||
             (is_clk_wire(w,cfg) && !cfg->expand_clock) ||
             (is_rst_wire(w,cfg) && !cfg->expand_reset)) {
             continue;
@@ -398,7 +398,7 @@ insert_duplicate_logic(RTLIL::Module *mod, std::vector<RTLIL::Wire *> wires,
         }
 
         // TODO: move attr to header
-        if (is_tmr_error_out_wire(w)) {
+        if (is_tmr_error_out_wire(w, cfg)) {
             wire_map[w] = w;
             continue;
         }
@@ -565,7 +565,7 @@ void logic_tmr_expansion(RTLIL::Module *mod, const ConfigManager *cfg_mgr,
         error_wires.insert(error_wires.end(), v_err_w.begin(), v_err_w.end());
     }
 
-    connect_error_signal(mod, error_wires);
+    connect_error_signal(mod, error_wires, cfg);
 }
 
 }

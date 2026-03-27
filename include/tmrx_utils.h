@@ -13,7 +13,7 @@ bool is_clk_wire(const RTLIL::Wire *w, const Config *cfg);
 bool is_clk_wire(RTLIL::IdString port, const Config *cfg);
 bool is_rst_wire(RTLIL::IdString port, const Config *cfg);
 bool is_rst_wire(const RTLIL::Wire *w, const Config *cfg);
-bool is_tmr_error_out_wire(RTLIL::Wire *w);
+bool is_tmr_error_out_wire(RTLIL::Wire *w, const Config *cfg);
 
 std::pair<std::vector<RTLIL::IdString>, std::vector<RTLIL::IdString>>
 get_port_names(const RTLIL::Cell *cell, const RTLIL::Design *design);
@@ -21,7 +21,8 @@ RTLIL::IdString createVoterCell(RTLIL::Design *design, size_t wire_width, const 
 std::pair<RTLIL::Wire *, RTLIL::Wire *>
 insert_voter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, const Config *cfg);
 
-void connect_error_signal(RTLIL::Module *mod,const std::vector<RTLIL::Wire *> &error_signals);
+void connect_error_signal(RTLIL::Module *mod, const std::vector<RTLIL::Wire *> &error_signals,
+                          const Config *cfg);
 
 }
 YOSYS_NAMESPACE_END

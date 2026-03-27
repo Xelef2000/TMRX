@@ -148,6 +148,8 @@ void ConfigManager::load_global_default_cfg() {
     global_cfg.logic_path_1_suffix = "_a";
     global_cfg.logic_path_2_suffix = "_b";
     global_cfg.logic_path_3_suffix = "_c";
+
+    global_cfg.error_port_name = "";
 }
 
 void ConfigManager::load_default_groups_cfg() {
@@ -257,6 +259,7 @@ ConfigPart ConfigManager::parse_config(const toml::value &t) {
     cfg.logic_path_1_suffix = toml_find_optional<std::string>(t, "logic_path_1_suffix");
     cfg.logic_path_2_suffix = toml_find_optional<std::string>(t, "logic_path_2_suffix");
     cfg.logic_path_3_suffix = toml_find_optional<std::string>(t, "logic_path_3_suffix");
+    cfg.error_port_name     = toml_find_optional<std::string>(t, "error_port_name");
 
     // Parse IdString pool fields
     cfg.clock_port_names = toml_parse_idstring_pool(t, "clock_port_names");
@@ -313,6 +316,7 @@ ConfigPart ConfigManager::parse_module_annotations(const Yosys::RTLIL::Module *m
     cfg.logic_path_1_suffix = get_string_attr_value(mod, cfg_logic_path_1_suffix_attr_name);
     cfg.logic_path_2_suffix = get_string_attr_value(mod, cfg_logic_path_2_suffix_attr_name);
     cfg.logic_path_3_suffix = get_string_attr_value(mod, cfg_logic_path_3_suffix_attr_name);
+    cfg.error_port_name     = get_string_attr_value(mod, cfg_error_port_name_attr_name);
 
     // Parse IdString pool fields
     cfg.clock_port_names = parse_attr_idstring_pool(mod, cfg_clock_port_name_attr_name);
@@ -354,6 +358,7 @@ Config ConfigManager::assemble_config(std::vector<ConfigPart> parts, Config def)
         apply_if_present(cfg.logic_path_1_suffix, part.logic_path_1_suffix);
         apply_if_present(cfg.logic_path_2_suffix, part.logic_path_2_suffix);
         apply_if_present(cfg.logic_path_3_suffix, part.logic_path_3_suffix);
+        apply_if_present(cfg.error_port_name, part.error_port_name);
     }
     return cfg;
 }
@@ -820,6 +825,8 @@ std::string ConfigManager::cfg_as_string(Yosys::RTLIL::Module *mod) const {
     ret += "Logic path 1 suffix: " + c->logic_path_1_suffix + "\n";
     ret += "Logic path 2 suffix: " + c->logic_path_2_suffix + "\n";
     ret += "Logic path 3 suffix: " + c->logic_path_3_suffix + "\n";
+    if (!c->error_port_name.empty())
+        ret += "Error port name: " + c->error_port_name + "\n";
 
     return ret;
 }
