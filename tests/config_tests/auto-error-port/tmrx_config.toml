@@ -1,0 +1,8 @@
+[global]
+tmr_mode                              = "LogicTMR"
+insert_voter_after_ff                 = true
+preserve_module_ports                 = true
+logic_path_1_suffix                   = "_a"
+logic_path_2_suffix                   = "_b"
+logic_path_3_suffix                   = "_c"
+auto_error_port                       = true

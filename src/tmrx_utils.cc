@@ -442,6 +442,22 @@ void connect_error_signal(RTLIL::Module *mod, const std::vector<RTLIL::Wire *> &
             sink = w;
         }
     }
+    if (sink == nullptr && cfg->auto_error_port && !error_signals.empty()) {
+        RTLIL::IdString port_name = mod->uniquify("\\tmrx_err_o");
+        RTLIL::Wire *new_port = mod->addWire(port_name, 1);
+        new_port->port_output = true;
+        mod->fixup_ports();
+        log("  Auto-created error port '%s' in module '%s'\n",
+            port_name.c_str(), mod->name.c_str());
+
+        RTLIL::SigSpec aggregated = RTLIL::State::S0;
+        for (auto s : error_signals) {
+            aggregated = mod->Or(NEW_ID, aggregated, s);
+        }
+        mod->connect(new_port, aggregated);
+        return;
+    }
+
     if (sink != nullptr && !error_signals.empty()) {
         RTLIL::IdString sink_name = sink->name;
         mod->rename(sink, mod->uniquify(sink_name.str() + "_old"));
