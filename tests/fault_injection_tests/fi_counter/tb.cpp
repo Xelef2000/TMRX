@@ -23,7 +23,7 @@
 #include "verilated.h"
 #include "Vfi_counter.h"
 
-#ifdef TMR
+#if defined(TMR) || defined(PLAIN_FI)
 #include "Vfi_counter___024root.h"
 #include "Vfi_counter__Syms.h"
 #endif
@@ -185,6 +185,30 @@ outer:
     std::cout << "Result: " << failures << "/" << total
               << " faults leaked (no TMR protection)\n";
     return failures ? 1 : 0;
+
+#elif defined(TMR_SANITY)
+    // ----------------------------------------------------------------
+    // TMR model sanity check (no fault injection)
+    //
+    // Verifies that the TMR-ed design produces correct output when run
+    // without any injected faults.  This confirms that the testbench
+    // setup (synthesis, Verilator elaboration, compilation) is correct
+    // before trusting the fault-injection results.
+    // ----------------------------------------------------------------
+    Vfi_counter dut;
+    do_reset(dut);
+    for (int c = 0; c < duration; c++) tick(dut);
+
+    auto expected = static_cast<uint8_t>(duration % 256);
+    auto actual   = static_cast<uint8_t>(dut.count_o);
+    if (actual != expected) {
+        std::cerr << "FAIL TMR counter (no faults): expected=" << static_cast<int>(expected)
+                  << "  got=" << static_cast<int>(actual) << "\n";
+        return 1;
+    }
+    std::cout << "PASS TMR counter (no faults): count_o=" << static_cast<int>(actual)
+              << " after " << duration << " cycles\n";
+    return 0;
 
 #else
     // ----------------------------------------------------------------

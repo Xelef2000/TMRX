@@ -1,19 +1,23 @@
 python = find_program('python3', required: true)
 verilator = find_program('verilator', required: true)
 
-fi_counter_src_dir = meson.current_source_dir()
-fi_counter_work_dir = meson.current_build_dir() / 'workdir'
+fi_shift_reg_src_dir  = meson.current_source_dir()
+fi_shift_reg_work_dir = meson.current_build_dir() / 'workdir'
+
+# Reuse the generic runner and macro-patch scripts from fi_counter.
+_fi_runner = meson.project_source_root() / 'tests/fault_injection_tests/fi_counter/run_fi_counter.py'
+_fi_patch  = meson.project_source_root() / 'tests/fault_injection_tests/fi_counter/patch_vl_macros.py'
 
 _common_args = [
-    fi_counter_src_dir / 'run_fi_counter.py',
+    _fi_runner,
     '--yosys', yosys.full_path(),
     '--tmrx-so', plugin_path,
     '--slang-so', slang_plugin_path,
-    '--input-v', fi_counter_src_dir / 'fi_counter.v',
-    '--top', 'fi_counter',
-    '--tmrx-config', fi_counter_src_dir / 'tmrx_config.toml',
-    '--patch-py', fi_counter_src_dir / 'patch_vl_macros.py',
-    '--tb-cpp', fi_counter_src_dir / 'tb.cpp',
+    '--input-v', fi_shift_reg_src_dir / 'fi_shift_reg.v',
+    '--top', 'fi_shift_reg',
+    '--tmrx-config', fi_shift_reg_src_dir / 'tmrx_config.toml',
+    '--patch-py', _fi_patch,
+    '--tb-cpp', fi_shift_reg_src_dir / 'tb.cpp',
     '--verilator', verilator.full_path(),
     '--duration', '100',
     '--num-faults', '4000000',
@@ -21,9 +25,9 @@ _common_args = [
 
 # TMR model sanity check: no fault injection, verifies the testbench setup is correct.
 test(
-    'fi_counter_tmr_sanity',
+    'fi_shift_reg_tmr_sanity',
     python,
-    args: _common_args + ['--mode', 'tmr-sanity', '--workdir', fi_counter_work_dir / 'tmr-sanity'],
+    args: _common_args + ['--mode', 'tmr-sanity', '--workdir', fi_shift_reg_work_dir / 'tmr-sanity'],
     timeout: 300,
     workdir: meson.current_build_dir(),
     depends: [slang_build, tmrx],
@@ -32,9 +36,9 @@ test(
 
 # TMR model: all single-bit faults should be masked by the majority voters.
 test(
-    'fi_counter_tmr_fault_injection',
+    'fi_shift_reg_tmr_fault_injection',
     python,
-    args: _common_args + ['--mode', 'tmr-fi', '--workdir', fi_counter_work_dir / 'tmr-fi'],
+    args: _common_args + ['--mode', 'tmr-fi', '--workdir', fi_shift_reg_work_dir / 'tmr-fi'],
     timeout: 300,
     workdir: meson.current_build_dir(),
     depends: [slang_build, tmrx],
@@ -44,9 +48,9 @@ test(
 # Plain model: no voters, so every injected fault corrupts the output.
 # This test is expected to fail (should_fail: true).
 test(
-    'fi_counter_plain_fault_injection',
+    'fi_shift_reg_plain_fault_injection',
     python,
-    args: _common_args + ['--mode', 'plain-fi', '--workdir', fi_counter_work_dir / 'plain-fi'],
+    args: _common_args + ['--mode', 'plain-fi', '--workdir', fi_shift_reg_work_dir / 'plain-fi'],
     timeout: 300,
     workdir: meson.current_build_dir(),
     depends: [slang_build, tmrx],
