@@ -80,9 +80,10 @@ def main():
     p.add_argument("--verilator",    default="verilator")
     p.add_argument("--duration",     type=int, default=50)
     p.add_argument("--num-faults",   type=int, default=10)
-    p.add_argument("--mode",         choices=["tmr-fi", "plain-fi"], default="tmr-fi",
+    p.add_argument("--mode",         choices=["tmr-fi", "plain-fi", "tmr-sanity"], default="tmr-fi",
                    help="tmr-fi: run fault injection on TMR model (expected to pass); "
-                        "plain-fi: run fault injection on plain model (expected to fail)")
+                        "plain-fi: run fault injection on plain model (expected to fail); "
+                        "tmr-sanity: run TMR model without fault injection (verifies testbench setup)")
     p.add_argument("--workdir",      default=None,
                    help="Persistent work directory (created if absent). "
                         "Defaults to a temp dir that is kept on failure.")
@@ -206,7 +207,22 @@ def main():
         ], label="g++/plain-fi")
 
         # ----------------------------------------------------------------
-        # 8. Sanity-check plain model (no fault injection)
+        # 8. Compile TMR sanity testbench (no fault injection, TMR model)
+        # ----------------------------------------------------------------
+        tb_tmr_sanity_bin = workdir / "tb_tmr_sanity"
+        run([
+            "g++", "-std=c++17",
+            f"-I{vl_include}",
+            f"-I{obj_tmr}",
+            "-DTMR_SANITY",
+            tb_cpp,
+        ] + tmr_cpps + [
+            vl_include / "verilated.cpp",
+            "-o", tb_tmr_sanity_bin,
+        ], label="g++/tmr-sanity")
+
+        # ----------------------------------------------------------------
+        # 10. Sanity-check plain model (no fault injection)
         # ----------------------------------------------------------------
         rc = run([tb_plain_bin,
                   "--duration",   str(args.duration),
@@ -217,13 +233,18 @@ def main():
             sys.exit(rc)
 
         # ----------------------------------------------------------------
-        # 9. Run selected experiment and propagate its exit code
+        # 11. Run selected experiment and propagate its exit code
         # ----------------------------------------------------------------
         if args.mode == "tmr-fi":
             rc = run([tb_tmr_bin,
                       "--duration",   str(args.duration),
                       "--num-faults", str(args.num_faults)],
                      check=False, label="run/tmr-fi").returncode
+        elif args.mode == "tmr-sanity":
+            rc = run([tb_tmr_sanity_bin,
+                      "--duration",   str(args.duration),
+                      "--num-faults", str(args.num_faults)],
+                     check=False, label="run/tmr-sanity").returncode
         else:  # plain-fi
             rc = run([tb_plain_fi_bin,
                       "--duration",   str(args.duration),
