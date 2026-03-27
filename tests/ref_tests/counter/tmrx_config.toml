@@ -4,14 +4,14 @@
 tmr_mode = "LogicTMR"
 tmr_voter = "Default"
 preserve_module_ports = false
-insert_voter_before_ff = false
-insert_voter_after_ff = true
-tmr_mode_full_module_insert_voter_before_modules = true
-tmr_mode_full_module_insert_voter_after_modules = true
 clock_port_names = ["clk_i"]
 expand_clock = false
 reset_port_names = ["rst_ni"]
 expand_reset = false
+
+[global.logic]
+insert_voter_before_ff = false
+insert_voter_after_ff = true
 ff_cells = ["DFF", "FDRE"]
 additional_ff_cells = ["FDCE"]
 excluded_ff_cells = ["FDSE"]
@@ -19,19 +19,23 @@ logic_path_1_suffix = "_a"
 logic_path_2_suffix = "_b"
 logic_path_3_suffix = "_c"
 
-[module_groups]
-mod1 = "groupA"
-mod2 = "groupB"
+[global.full_module]
+insert_voter_before_modules = true
+insert_voter_after_modules = true
 
-
-[groupA]
+[group.A]
 tmr_mode = "LogicTMR"
-insert_voter_before_ff = true
 
-[groupB]
+[group.A.logic]
+insert_voter_after_ff = true
+
+[group.B]
 tmr_voter = "Default"
 expand_clock = false
 
-[module_mod1]
+[module.top]
+groups = ["A", "B"]
 tmr_mode = "None"
+
+[module.top.logic]
 ff_cells = ["MY_FF_CELL"]

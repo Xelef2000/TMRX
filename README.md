@@ -273,10 +273,10 @@ Configuration is resolved in layers, with later layers overriding earlier ones:
 
 1. **Global defaults** (built-in hardcoded defaults)
 2. **Global config** (`[global]` section in TOML)
-3. **Group config** (`[group<name>]` sections)
-4. **Module config** (`[module_<name>]` sections)
+3. **Group config** (`[group.<name>]` sections)
+4. **Module config** (`[module.<name>]` sections)
 5. **Verilog attributes** (`(* tmrx_* *)` on modules)
-6. **Specific instance config** (`["specific_module_<name>"]` sections) — **highest priority**
+6. **Specific instance config** (`[specific_module."<name>"]` sections) — **highest priority**
 
 This layered approach allows you to set sensible defaults globally and override them for specific modules or instances.
 
@@ -289,56 +289,75 @@ The `[global]` section sets default values for all modules:
 tmr_mode = "LogicTMR"
 tmr_voter = "Default"
 preserve_module_ports = false
-insert_voter_after_ff = true
-insert_voter_before_ff = false
 clock_port_names = ["clk_i", "clk"]
 reset_port_names = ["rst_ni", "rst_n"]
 expand_clock = false
 expand_reset = false
+
+[global.logic]
+insert_voter_after_ff = true
+insert_voter_before_ff = false
 logic_path_1_suffix = "_a"
 logic_path_2_suffix = "_b"
 logic_path_3_suffix = "_c"
+
+[global.full_module]
+insert_voter_before_modules = false
+insert_voter_after_modules = true
 ```
 
 ### Module Groups
 
-Groups allow you to apply the same configuration to multiple modules. First, assign modules to groups:
+Groups allow you to apply the same configuration to multiple modules. Assign groups inline in each module scope:
 
 ```toml
-[module_groups]
-uart_rx = "safety_critical"
-uart_tx = "safety_critical"
-debug_controller = "non_critical"
-test_module = "non_critical"
+[module.uart_rx]
+groups = ["safety_critical"]
+
+[module.uart_tx]
+groups = ["safety_critical"]
+
+[module.debug_controller]
+groups = ["non_critical"]
+
+[module.test_module]
+groups = ["non_critical"]
 ```
 
 Then define the group configurations:
 
 ```toml
-[groupsafety_critical]
+[group.safety_critical]
 tmr_mode = "FullModuleTMR"
-tmr_mode_full_module_insert_voter_after_modules = true
 preserve_module_ports = false
 
-[groupnon_critical]
+[group.safety_critical.full_module]
+insert_voter_after_modules = true
+
+[group.non_critical]
 tmr_mode = "None"
 ```
 
-**Note:** Group names are prefixed with `group` in the section header (e.g., `[groupsafety_critical]` for group `safety_critical`).
+**Note:** Group names are scoped under `group` (for example, `[group.safety_critical]`).
 
 ### Per-Module Configuration
 
-Configure specific modules by name using the `module_` prefix:
+Configure specific modules by name using the `module` scope:
 
 ```toml
-[module_alu]
+[module.alu]
 tmr_mode = "LogicTMR"
 expand_reset = true
+
+[module.alu.logic]
 insert_voter_after_ff = true
 
-[module_register_file]
+[module.register_file]
 tmr_mode = "FullModuleTMR"
 preserve_module_ports = true
+
+[module.register_file.full_module]
+insert_voter_after_modules = true
 ```
 
 ### Specific Instance Configuration
@@ -346,9 +365,12 @@ preserve_module_ports = true
 When using yosys-slang, parameterized modules are often uniquified with names like `module$hierarchy.path`. To configure a specific instance:
 
 ```toml
-["specific_module_submodule$top.cpu.u_alu"]
+[specific_module."submodule$top.cpu.u_alu"]
 tmr_mode = "FullModuleTMR"
 preserve_module_ports = true
+
+[specific_module."submodule$top.cpu.u_alu".full_module]
+insert_voter_after_modules = true
 ```
 
 **Important:** Specific module configurations must include a `$` in the name. Use this for uniquified module names from yosys-slang.
@@ -408,10 +430,6 @@ endmodule
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `tmr_voter` | String | `"Default"` | Voter implementation to use |
-| `insert_voter_after_ff` | Bool | `true` | Insert voters after flip-flop outputs |
-| `insert_voter_before_ff` | Bool | `false` | Insert voters before flip-flop inputs (**planned, not yet implemented**) |
-| `tmr_mode_full_module_insert_voter_before_modules` | Bool | `false` | Insert voters at module inputs (Full Module TMR) |
-| `tmr_mode_full_module_insert_voter_after_modules` | Bool | `true` | Insert voters at module outputs (Full Module TMR) |
 
 **Voter types:**
 - `"Default"`: Simple majority voter using AND/OR gates. Future versions may support alternative voter implementations (e.g., with different error detection characteristics).
@@ -419,6 +437,32 @@ endmodule
 The default voter implements:
 - **Output**: `y = (a & b) | (a & c) | (b & c)` (majority function)
 - **Error**: `err = (a ^ b) | (b ^ c)` (any mismatch detected)
+
+### Logic TMR Options
+
+These options belong in a `[<scope>.logic]` block such as `[global.logic]` or `[module.alu.logic]`.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `insert_voter_after_ff` | Bool | `true` | Insert voters after flip-flop outputs |
+| `insert_voter_before_ff` | Bool | `false` | Insert voters before flip-flop inputs (**planned, not yet implemented**) |
+| `ff_cells` | List | `[]` | Explicitly treat these cells as flip-flops |
+| `additional_ff_cells` | List | `[]` | Add cells without replacing inherited `ff_cells` |
+| `excluded_ff_cells` | List | `[]` | Remove cells from flip-flop treatment |
+| `logic_path_1_suffix` | String | `"_a"` | Suffix for first redundant path |
+| `logic_path_2_suffix` | String | `"_b"` | Suffix for second redundant path |
+| `logic_path_3_suffix` | String | `"_c"` | Suffix for third redundant path |
+
+### Full Module TMR Options
+
+These options belong in a `[<scope>.full_module]` block such as `[global.full_module]` or `[group.critical.full_module]`.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `insert_voter_before_modules` | Bool | `false` | Insert voters at module inputs (Full Module TMR) |
+| `insert_voter_after_modules` | Bool | `true` | Insert voters at module outputs (Full Module TMR) |
+| `insert_voter_on_clock_nets` | Bool | `false` | Allow voters on expanded clock nets |
+| `insert_voter_on_reset_nets` | Bool | `false` | Allow voters on expanded reset nets |
 
 ### Port Preservation
 
@@ -476,10 +520,10 @@ TMRX automatically detects Yosys built-in FF types. These options allow fine-tun
 **Example:**
 
 ```toml
-[global]
+[global.logic]
 ff_cells = ["sg13g2_dfrbp_1"]
 
-[module_special]
+[module.special.logic]
 additional_ff_cells = ["MY_CUSTOM_FF"]
 excluded_ff_cells = ["sg13g2_dfrbp_1"]
 ```
@@ -492,7 +536,7 @@ excluded_ff_cells = ["sg13g2_dfrbp_1"]
 | `logic_path_2_suffix` | String | `"_b"` | Suffix for second redundant path |
 | `logic_path_3_suffix` | String | `"_c"` | Suffix for third redundant path |
 
-These suffixes are appended to wire and cell names when triplicating logic.
+These suffixes are configured in `[<scope>.logic]` blocks and are appended to wire and cell names when triplicating logic.
 
 ---
 
@@ -648,10 +692,10 @@ Or use wire attributes:
 
 ```toml
 # Wrong - no $, will be treated as module config
-[module_submodule]
+[module.submodule]
 
 # Correct - includes hierarchy path
-["specific_module_submodule$top.u_sub"]
+[specific_module."submodule$top.u_sub"]
 ```
 
 Check Yosys output for the exact uniquified module names.
@@ -660,17 +704,17 @@ Check Yosys output for the exact uniquified module names.
 
 **Problem:** Module assigned to group but group settings not applied.
 
-**Solution:** Check group section naming. The section must be `[group<name>]` (no underscore):
+**Solution:** Check the scoped table names. Use `[group.<name>]` and assign membership via `groups = ["<name>"]` inside `[module.<name>]` or `[specific_module."<name>"]`.
 
 ```toml
-[module_groups]
-my_module = "critical"
+[module.my_module]
+groups = ["critical"]
 
 # Wrong
 [group_critical]
 
 # Correct
-[groupcritical]
+[group.critical]
 ```
 
 ### 6. Error Signal Not Connected
@@ -724,10 +768,12 @@ endmodule
 ```toml
 [global]
 tmr_mode = "LogicTMR"
-insert_voter_after_ff = true
 preserve_module_ports = true
 clock_port_names = ["clk_i"]
 reset_port_names = ["rst_ni"]
+
+[global.logic]
+insert_voter_after_ff = true
 ```
 
 ### Hierarchical Design with Mixed Strategies
@@ -740,21 +786,25 @@ clock_port_names = ["clk_i", "clk"]
 reset_port_names = ["rst_ni", "rst_n"]
 
 # Critical control logic uses Full Module TMR
-[module_groups]
-control_unit = "critical"
-alu = "critical"
+[module.control_unit]
+groups = ["critical"]
 
-[groupcritical]
+[module.alu]
+groups = ["critical"]
+
+[group.critical]
 tmr_mode = "FullModuleTMR"
-tmr_mode_full_module_insert_voter_after_modules = true
 preserve_module_ports = false
 
+[group.critical.full_module]
+insert_voter_after_modules = true
+
 # Debug module excluded from TMR
-[module_debug_controller]
+[module.debug_controller]
 tmr_mode = "None"
 
 # Specific instance with preserved ports for compatibility
-["specific_module_uart$top.u_uart"]
+[specific_module."uart$top.u_uart"]
 tmr_mode = "FullModuleTMR"
 preserve_module_ports = true
 ```
@@ -793,7 +843,7 @@ While TMRX works with standard `read_verilog`, using [yosys-slang](https://githu
 
 - **SystemVerilog support**: Full SV2017 language support
 - **Better hierarchy handling**: Proper module uniquification for parameterized modules
-- **Cleaner elaboration**: More predictable module naming for `specific_module_` configs
+- **Cleaner elaboration**: More predictable module naming for `specific_module."<name>"` configs
 
 **Example with yosys-slang:**
 

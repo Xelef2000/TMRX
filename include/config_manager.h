@@ -13,9 +13,12 @@ YOSYS_NAMESPACE_BEGIN
 
 YOSYS_NAMESPACE_END
 
-const std::string cfg_group_prefix = "group";
-const std::string cfg_module_prefix = "module_";
-const std::string cfg_specific_module_prefix = "specific_module_";
+const std::string cfg_group_scope_name = "group";
+const std::string cfg_module_scope_name = "module";
+const std::string cfg_specific_module_scope_name = "specific_module";
+const std::string cfg_logic_scope_name = "logic";
+const std::string cfg_full_module_scope_name = "full_module";
+const std::string cfg_groups_key_name = "groups";
 
 const std::string cfg_group_assignment_attr_name = "\\tmrx_assign_to_group";
 const std::string cfg_tmr_mode_attr_name = "\\tmrx_tmr_mode";
