@@ -1,0 +1,5 @@
+name: tmrx
+title: TMRX
+version: ~
+nav:
+  - modules/ROOT/nav.adoc

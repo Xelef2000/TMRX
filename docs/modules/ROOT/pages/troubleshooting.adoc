@@ -1,0 +1,110 @@
+= Troubleshooting
+:description: Common pitfalls and solutions when using TMRX.
+
+== Running tmrx_mark at the Wrong Time
+
+*Symptom:* FFs are not detected; voters are not inserted correctly.
+
+*Solution:* Run `tmrx_mark` after `techmap` but before `dfflibmap` and `abc`:
+
+[source]
+----
+techmap
+tmrx_mark          # <-- Correct position
+read_liberty -lib cells.lib
+dfflibmap -liberty cells.lib
+abc -liberty cells.lib
+----
+
+== Forgetting to Re-run Technology Mapping After TMR
+
+*Symptom:* Voter modules remain as abstract cells in the final netlist.
+
+*Solution:* Run `techmap`, `dfflibmap`, and `abc` again after `tmrx`:
+
+[source]
+----
+tmrx -c config.toml
+opt -noff
+techmap
+dfflibmap -liberty cells.lib
+abc -liberty cells.lib
+----
+
+== Clock/Reset Not Recognized
+
+*Symptom:* Clock or reset signals are being triplicated unexpectedly.
+
+*Solution:* Ensure port names match the configuration:
+
+[source,toml]
+----
+clock_port_names = ["clk_i", "clk", "clock"]
+reset_port_names = ["rst_ni", "rst_n", "reset_n", "rstn"]
+----
+
+Alternatively, use wire attributes:
+
+[source,verilog]
+----
+(* tmrx_clk_port *) input wire my_unusual_clock_name,
+----
+
+== Specific Module Config Not Applied
+
+*Symptom:* Configuration for a specific instance is ignored.
+
+*Solution:* Ensure the name includes `$` and matches the uniquified name exactly:
+
+[source,toml]
+----
+# Wrong: no $, treated as module config
+[module.submodule]
+
+# Correct: includes hierarchy path
+[specific_module."submodule$top.u_sub"]
+----
+
+Check Yosys output for the exact uniquified module names.
+
+== Group Configuration Not Taking Effect
+
+*Symptom:* Module assigned to group but group settings not applied.
+
+*Solution:* Check the scoped table names.
+Use `[group.<name>]` and assign membership via `groups = ["<name>"]` inside `[module.<name>]` or `[specific_module."<name>"]`:
+
+[source,toml]
+----
+[module.my_module]
+groups = ["critical"]
+
+# Wrong
+[group_critical]
+
+# Correct
+[group.critical]
+----
+
+== Error Signal Not Connected
+
+*Symptom:* Error output remains unconnected or constant.
+
+*Solution:* Ensure the error sink is marked and is an output port:
+
+[source,verilog]
+----
+(* tmrx_error_sink *)
+output wire err_o   // Must be output, not input or wire
+----
+
+== Broken Netlist Output
+
+*Symptom:* Generated netlist has connectivity issues or does not simulate correctly.
+
+TMRX is still in development.
+If you encounter broken netlists:
+
+. Try simplifying your design.
+. Check if the issue is specific to certain TMR modes.
+. Report the issue at https://github.com/Xelef2000/TMRX/issues with a minimal reproducing example.

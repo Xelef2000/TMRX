@@ -1,0 +1,81 @@
+= Yosys Integration
+:description: How to integrate TMRX passes into your Yosys synthesis flow.
+
+TMRX provides two Yosys passes that integrate into your synthesis flow.
+
+== The tmrx_mark Pass
+
+[source]
+----
+tmrx_mark
+----
+
+The `tmrx_mark` pass scans selected modules and marks:
+
+* *Flip-flops*: Records FF source locations for later identification after technology mapping.
+* *Submodule boundaries*: Marks modules that are instantiated within others.
+
+[IMPORTANT]
+====
+Run `tmrx_mark` after heavy optimization (`proc`, `opt`, `techmap`) but *before* `abc` and `dfflibmap`.
+Technology mapping can change cell types, making it harder to identify flip-flops afterward.
+The marking preserves this information for the `tmrx` pass.
+====
+
+== The tmrx Pass
+
+[source]
+----
+tmrx -c config.toml
+----
+
+The main TMR expansion pass.
+It loads configuration from the TOML file, processes modules in topological order (leaf modules first), and applies the configured TMR strategy with voter insertion.
+
+.Arguments
+`-c <file>`:: Path to TOML configuration file. Optional; uses defaults if not provided.
+
+== Synthesis Flow
+
+The recommended synthesis flow order:
+
+[source]
+----
+1.  Read design (read_verilog / read_slang)
+2.  Hierarchy resolution (hierarchy -check -top <top>)
+3.  Process elaboration (proc)
+4.  Optimization (opt)
+5.  Technology mapping (techmap)
+6.  ══════════════════════════════════════
+7.  tmrx_mark  ← Mark FFs and submodules
+8.  ══════════════════════════════════════
+9.  Read liberty file (read_liberty -lib)
+10. FF mapping (dfflibmap -liberty)
+11. Logic synthesis (abc -liberty)
+12. ══════════════════════════════════════
+13. tmrx -c config.toml  ← Apply TMR
+14. ══════════════════════════════════════
+15. Final optimization (opt -noff)
+16. Re-run techmap, dfflibmap, abc for voters
+17. Cleanup (opt_clean -purge, clean)
+18. Output (write_verilog, write_json)
+----
+
+== yosys-slang Integration
+
+While TMRX works with standard `read_verilog`, using https://github.com/povik/yosys-slang[yosys-slang] is recommended for:
+
+* *SystemVerilog support*: Full SV2017 language support.
+* *Better hierarchy handling*: Proper module uniquification for parameterized modules.
+* *Cleaner elaboration*: More predictable module naming for `specific_module."<name>"` configs.
+
+[source]
+----
+read_slang --top top design.sv \
+    --compat-mode \
+    --keep-hierarchy \
+    --allow-use-before-declare \
+    --ignore-unknown-modules
+----
+
+yosys-slang is automatically cloned and built as part of the TMRX build process.

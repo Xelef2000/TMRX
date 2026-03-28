@@ -1,0 +1,42 @@
+= Error Detection
+:description: How to use TMRX error detection to monitor voter disagreements in your design.
+
+TMRX can aggregate error signals from all voters to a single output port for monitoring.
+
+== Defining an Error Sink
+
+Mark an output port with the `tmrx_error_sink` attribute:
+
+[source,verilog]
+----
+module my_module (
+    input  wire clk_i,
+    input  wire rst_ni,
+    input  wire [7:0] data_i,
+    output wire [7:0] data_o,
+    (* tmrx_error_sink *)
+    output wire err_o
+);
+    // ...
+endmodule
+----
+
+== How It Works
+
+. Each voter generates an error signal when inputs do not match.
+. All error signals within the module are OR'd together.
+. The combined error is connected to the `tmrx_error_sink` port.
+. If submodules also have error sinks, those are propagated up.
+
+== Behavior Without an Error Sink
+
+If no `tmrx_error_sink` is defined:
+
+* Voters still generate error signals internally.
+* Error signals are not connected (left floating).
+* No warning is generated.
+
+[TIP]
+====
+Define an error sink for production designs to enable fault monitoring.
+====
