@@ -1,0 +1,200 @@
+= Configuration
+:description: How to configure TMRX using TOML files, module groups, per-module settings, and Verilog attributes.
+
+TMRX uses TOML format for configuration, passed to the `tmrx` pass with the `-c` flag:
+
+[source]
+----
+tmrx -c tmrx_config.toml
+----
+
+If no configuration file is provided, TMRX uses built-in default settings.
+
+== Configuration Precedence
+
+Configuration is resolved in layers, with later layers overriding earlier ones:
+
+. *Global defaults* — built-in hardcoded defaults
+. *Global config* — `[global]` section in TOML
+. *Group config* — `[group.<name>]` sections
+. *Module config* — `[module.<name>]` sections
+. *Verilog attributes* — `(* tmrx_* *)` on modules
+. *Specific instance config* — `[specific_module."<name>"]` sections (*highest priority*)
+
+This layered approach allows you to set sensible defaults globally and override them for specific modules or instances.
+
+== Global Configuration
+
+The `[global]` section sets default values for all modules:
+
+[source,toml]
+----
+[global]
+tmr_mode = "LogicTMR"
+tmr_voter = "Default"
+preserve_module_ports = false
+clock_port_names = ["clk_i", "clk"]
+reset_port_names = ["rst_ni", "rst_n"]
+expand_clock = false
+expand_reset = false
+
+[global.logic]
+insert_voter_after_ff = true
+insert_voter_before_ff = false
+logic_path_1_suffix = "_a"
+logic_path_2_suffix = "_b"
+logic_path_3_suffix = "_c"
+
+[global.full_module]
+insert_voter_before_modules = false
+insert_voter_after_modules = true
+----
+
+== Module Groups
+
+Groups allow you to apply the same configuration to multiple modules.
+Assign groups inline in each module scope:
+
+[source,toml]
+----
+[module.uart_rx]
+groups = ["safety_critical"]
+
+[module.uart_tx]
+groups = ["safety_critical"]
+
+[module.debug_controller]
+groups = ["non_critical"]
+----
+
+Then define the group configurations:
+
+[source,toml]
+----
+[group.safety_critical]
+tmr_mode = "FullModuleTMR"
+preserve_module_ports = false
+
+[group.safety_critical.full_module]
+insert_voter_after_modules = true
+
+[group.non_critical]
+tmr_mode = "None"
+----
+
+[NOTE]
+====
+Group names are scoped under `group` (for example, `[group.safety_critical]`).
+====
+
+== Per-Module Configuration
+
+Configure specific modules by name using the `module` scope:
+
+[source,toml]
+----
+[module.alu]
+tmr_mode = "LogicTMR"
+expand_reset = true
+
+[module.alu.logic]
+insert_voter_after_ff = true
+
+[module.register_file]
+tmr_mode = "FullModuleTMR"
+preserve_module_ports = true
+
+[module.register_file.full_module]
+insert_voter_after_modules = true
+----
+
+== Specific Instance Configuration
+
+When using yosys-slang, parameterized modules are often uniquified with names like `module$hierarchy.path`.
+To configure a specific instance:
+
+[source,toml]
+----
+[specific_module."submodule$top.cpu.u_alu"]
+tmr_mode = "FullModuleTMR"
+preserve_module_ports = true
+
+[specific_module."submodule$top.cpu.u_alu".full_module]
+insert_voter_after_modules = true
+----
+
+[IMPORTANT]
+====
+Specific module configurations must include a `$` in the name.
+Use this for uniquified module names from yosys-slang.
+====
+
+== Verilog Attribute Configuration
+
+You can configure TMR directly in your Verilog source using attributes:
+
+[source,verilog]
+----
+(* tmrx_tmr_mode = "FullModuleTMR" *)
+(* tmrx_preserve_module_ports = "1" *)
+(* tmrx_insert_voter_after_ff = "1" *)
+module critical_module (
+    input  wire clk_i,
+    input  wire rst_ni,
+    input  wire [7:0] data_i,
+    output wire [7:0] data_o
+);
+    // ...
+endmodule
+----
+
+.Supported Module Attributes
+[cols="2,2,3",options="header"]
+|===
+| Attribute | Values | Description
+
+| `tmrx_tmr_mode`
+| `"None"`, `"LogicTMR"`, `"FullModuleTMR"`
+| TMR strategy
+
+| `tmrx_tmr_voter`
+| `"Default"`
+| Voter type
+
+| `tmrx_preserve_module_ports`
+| `"0"`, `"1"`
+| Keep original interface
+
+| `tmrx_insert_voter_before_ff`
+| `"0"`, `"1"`
+| Voters before FFs (planned)
+
+| `tmrx_insert_voter_after_ff`
+| `"0"`, `"1"`
+| Voters after FFs
+
+| `tmrx_expand_clock`
+| `"0"`, `"1"`
+| Triplicate clock
+
+| `tmrx_expand_rst`
+| `"0"`, `"1"`
+| Triplicate reset
+
+| `tmrx_assign_to_group`
+| `"group_name"` or `"group1;group2"`
+| Assign to group(s)
+
+| `tmrx_clock_port_name`
+| `"clk"` or `"clk1;clk2"`
+| Clock port names
+
+| `tmrx_rst_port_name`
+| `"rst"` or `"rst1;rst2"`
+| Reset port names
+|===
+
+[NOTE]
+====
+For list values in attributes, use semicolon (`;`) as separator.
+====

@@ -1,0 +1,127 @@
+= Examples
+:description: Complete examples of TMRX usage for common design patterns.
+
+== Minimal Counter with Logic TMR
+
+This example applies Logic TMR to a simple 8-bit counter with an error sink.
+
+.counter.v
+[source,verilog]
+----
+module counter (
+    input  wire clk_i,
+    input  wire rst_ni,
+    input  wire en_i,
+    output reg [7:0] count_o,
+    (* tmrx_error_sink *)
+    output wire err_o
+);
+
+always @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni)
+        count_o <= 8'd0;
+    else if (en_i)
+        count_o <= count_o + 1'd1;
+end
+
+endmodule
+----
+
+.config.toml
+[source,toml]
+----
+[global]
+tmr_mode = "LogicTMR"
+preserve_module_ports = true
+clock_port_names = ["clk_i"]
+reset_port_names = ["rst_ni"]
+
+[global.logic]
+insert_voter_after_ff = true
+----
+
+== Hierarchical Design with Mixed Strategies
+
+This example mixes Logic TMR and Full Module TMR within the same design, with some modules excluded from TMR entirely.
+
+.config.toml
+[source,toml]
+----
+[global]
+tmr_mode = "LogicTMR"
+clock_port_names = ["clk_i", "clk"]
+reset_port_names = ["rst_ni", "rst_n"]
+
+# Critical control logic uses Full Module TMR
+[module.control_unit]
+groups = ["critical"]
+
+[module.alu]
+groups = ["critical"]
+
+[group.critical]
+tmr_mode = "FullModuleTMR"
+preserve_module_ports = false
+
+[group.critical.full_module]
+insert_voter_after_modules = true
+
+# Debug module excluded from TMR
+[module.debug_controller]
+tmr_mode = "None"
+
+# Specific instance with preserved ports for compatibility
+[specific_module."uart$top.u_uart"]
+tmr_mode = "FullModuleTMR"
+preserve_module_ports = true
+----
+
+== Custom Flip-Flop Detection
+
+This example shows how to configure TMRX to recognize custom FF cells from a technology library.
+
+.config.toml
+[source,toml]
+----
+[global]
+tmr_mode = "LogicTMR"
+
+[global.logic]
+insert_voter_after_ff = true
+ff_cells = ["sg13g2_dfrbp_1", "sg13g2_dffr_1"]
+
+# Special module uses an additional custom FF not in the global list
+[module.special_block.logic]
+additional_ff_cells = ["MY_CUSTOM_LATCH"]
+----
+
+== Using Verilog Attributes
+
+This example uses Verilog attributes to configure TMR without a separate TOML file.
+
+.design.v
+[source,verilog]
+----
+(* tmrx_tmr_mode = "FullModuleTMR" *)
+(* tmrx_preserve_module_ports = "1" *)
+module critical_block (
+    (* tmrx_clk_port *)
+    input  wire clk,
+    (* tmrx_rst_port *)
+    input  wire reset_n,
+    input  wire [7:0] data_i,
+    output wire [7:0] data_o,
+    (* tmrx_error_sink *)
+    output wire tmr_error
+);
+    // ...
+endmodule
+
+(* tmrx_tmr_mode = "None" *)
+module debug_monitor (
+    input  wire clk,
+    input  wire [7:0] data_i
+);
+    // ...
+endmodule
+----

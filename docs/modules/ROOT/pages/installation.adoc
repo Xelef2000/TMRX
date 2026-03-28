@@ -1,0 +1,59 @@
+= Installation
+:description: How to install TMRX using Docker or build from source.
+
+== Using Docker (Recommended)
+
+The easiest way to use TMRX is with the prebuilt Docker container that includes all dependencies:
+
+[source,bash]
+----
+docker pull ghcr.io/xelef2000/vlsi-toolbox:latest-amd64
+docker run -it -v $(pwd):/workspace ghcr.io/xelef2000/vlsi-toolbox:latest-amd64
+----
+
+The container includes Yosys, yosys-slang, and all required build tools.
+
+== Building from Source
+
+=== Prerequisites
+
+The following tools must be installed and available in your `PATH`:
+
+* *Yosys* with `yosys-config`
+* *Meson* build system
+* *C++17-compatible compiler* (GCC or Clang)
+* *Git* for fetching dependencies
+* *Make* for building sub-dependencies
+
+=== Build Steps
+
+. Clone the repository:
++
+[source,bash]
+----
+git clone https://github.com/Xelef2000/TMRX.git
+cd TMRX
+----
+
+. Configure the build directory:
++
+[source,bash]
+----
+meson setup build
+----
+
+. Build the plugin:
++
+[source,bash]
+----
+meson compile -C build
+----
+
+The shared library `tmrx.so` is generated in `build/`.
+
+=== Auto-cloned Dependencies
+
+During the first build, Meson automatically clones:
+
+* *yosys-slang*: SystemVerilog frontend for Yosys
+* *IHP-Open-PDK*: Open-source PDK used for testing

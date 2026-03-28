@@ -1,0 +1,31 @@
+= TMRX: Triple Modular Redundancy Expansion for Yosys
+:description: TMRX is a Yosys plugin that automatically injects Triple Modular Redundancy (TMR) into digital designs.
+
+[IMPORTANT]
+====
+TMRX is currently in active development and *not yet ready for production use*.
+Some features may not work as expected or may not be implemented.
+The tool may produce broken netlists.
+Use with caution and always verify outputs.
+====
+
+TMRX is a Yosys plugin that automatically injects Triple Modular Redundancy (TMR) into digital designs.
+It provides fine-grained fault-tolerance control across your design hierarchy, allowing you to mix Logic TMR and Full Module TMR strategies within the same design.
+
+TMRX is intended for safety-critical, radiation-tolerant, and high-reliability FPGA/ASIC flows where selective redundancy is required.
+
+== TMR Strategies
+
+TMRX supports two complementary TMR strategies:
+
+Logic TMR:: Triplicates internal combinational logic, wires, and flip-flops within a module.
+Full Module TMR:: Instantiates three independent copies of a module with optional output voters.
+
+Both strategies can be mixed within the same design hierarchy.
+
+== Getting Started
+
+* xref:installation.adoc[Install TMRX] using Docker or build from source.
+* Follow the xref:quick-start.adoc[Quick Start] guide to apply TMR to your first design.
+* Learn about xref:tmr-strategies.adoc[TMR Strategies] and how to choose between them.
+* Configure TMRX using the xref:configuration.adoc[Configuration] guide.

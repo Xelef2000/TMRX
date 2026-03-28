@@ -1,0 +1,69 @@
+= TMR Strategies
+:description: TMRX supports two complementary TMR strategies that can be mixed within the same design.
+
+TMRX supports two complementary TMR strategies that can be mixed within the same design hierarchy.
+
+== Logic TMR
+
+Logic TMR triplicates the *internal logic* of a module while optionally preserving the original interface.
+
+=== What Gets Triplicated
+
+* All combinational logic gates
+* All wires and signals
+* All flip-flops
+* All internal connections
+
+=== How It Works
+
+. Every wire and cell is duplicated with configurable suffixes (for example, `_a`, `_b`, `_c`).
+. Majority voters are inserted after flip-flop outputs (configurable).
+. If `preserve_module_ports = true`, voters are inserted at outputs to maintain the original interface.
+. If `preserve_module_ports = false`, the module interface is expanded with triplicated ports.
+
+== Full Module TMR
+
+Full Module TMR creates a *wrapper module* containing three independent instances of the original module.
+
+=== What Gets Created
+
+* A new wrapper module with the original module name
+* The original module renamed with a `_tmrx_worker` suffix
+* Three instances of the worker module inside the wrapper
+* Optional input voters (before modules)
+* Optional output voters (after modules)
+
+=== How It Works
+
+. The original module is renamed and wrapped.
+. Three instances are created with connections to wrapper ports.
+. If `preserve_module_ports = false`, ports are triplicated.
+. Voters can be inserted at inputs, outputs, or both.
+
+== Choosing a Strategy
+
+[cols="1,1,1",options="header"]
+|===
+| Consideration | Logic TMR | Full Module TMR
+
+| Interface changes
+| Optional (with `preserve_module_ports`)
+| Optional (with `preserve_module_ports`)
+
+| Voter placement
+| After FFs, at outputs
+| At module boundaries
+
+| Area overhead
+| Generally lower
+| Slightly higher (wrapper overhead)
+
+| Black-box modules
+| Not applicable
+| Required
+|===
+
+[NOTE]
+====
+Black-box modules (modules with the `blackbox` attribute, memories, or processes) are automatically assigned Full Module TMR because their internals cannot be modified.
+====

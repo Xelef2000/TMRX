@@ -1,0 +1,240 @@
+= Configuration Reference
+:description: Complete reference for all TMRX configuration options.
+
+== TMR Mode Options
+
+[cols="1,1,1,3",options="header"]
+|===
+| Option | Type | Default | Description
+
+| `tmr_mode`
+| String
+| `"LogicTMR"`
+| The TMR strategy to apply
+|===
+
+.Valid Values
+`"None"`:: No TMR applied to this module.
+`"LogicTMR"`:: Triplicate internal logic with voters after FFs.
+`"FullModuleTMR"`:: Create wrapper with three module instances.
+
+== Voter Options
+
+[cols="1,1,1,3",options="header"]
+|===
+| Option | Type | Default | Description
+
+| `tmr_voter`
+| String
+| `"Default"`
+| Voter implementation to use
+|===
+
+The `"Default"` voter implements a simple majority function using AND/OR gates:
+
+* *Output*: `y = (a & b) | (a & c) | (b & c)` (majority function)
+* *Error*: `err = (a ^ b) | (b ^ c)` (any mismatch detected)
+
+== Logic TMR Options
+
+Configure in a `[<scope>.logic]` block such as `[global.logic]` or `[module.alu.logic]`.
+
+[cols="2,1,1,3",options="header"]
+|===
+| Option | Type | Default | Description
+
+| `insert_voter_after_ff`
+| Bool
+| `true`
+| Insert voters after flip-flop outputs
+
+| `insert_voter_before_ff`
+| Bool
+| `false`
+| Insert voters before flip-flop inputs (*planned, not yet implemented*)
+
+| `ff_cells`
+| List
+| `[]`
+| Explicitly treat these cells as flip-flops
+
+| `additional_ff_cells`
+| List
+| `[]`
+| Add cells without replacing inherited `ff_cells`
+
+| `excluded_ff_cells`
+| List
+| `[]`
+| Remove cells from flip-flop treatment
+
+| `logic_path_1_suffix`
+| String
+| `"_a"`
+| Suffix for first redundant path
+
+| `logic_path_2_suffix`
+| String
+| `"_b"`
+| Suffix for second redundant path
+
+| `logic_path_3_suffix`
+| String
+| `"_c"`
+| Suffix for third redundant path
+|===
+
+== Full Module TMR Options
+
+Configure in a `[<scope>.full_module]` block such as `[global.full_module]` or `[group.critical.full_module]`.
+
+[cols="2,1,1,3",options="header"]
+|===
+| Option | Type | Default | Description
+
+| `insert_voter_before_modules`
+| Bool
+| `false`
+| Insert voters at module inputs
+
+| `insert_voter_after_modules`
+| Bool
+| `true`
+| Insert voters at module outputs
+
+| `insert_voter_on_clock_nets`
+| Bool
+| `false`
+| Allow voters on expanded clock nets
+
+| `insert_voter_on_reset_nets`
+| Bool
+| `false`
+| Allow voters on expanded reset nets
+|===
+
+== Port Preservation
+
+[cols="2,1,1,3",options="header"]
+|===
+| Option | Type | Default | Description
+
+| `preserve_module_ports`
+| Bool
+| `false`
+| Keep original module interface unchanged
+|===
+
+When `preserve_module_ports = true`:::
+* The module interface remains identical to the original.
+* Input signals are fanned out to all three redundant paths.
+* Output signals pass through voters to produce a single output.
+* Useful for drop-in replacement compatibility.
+
+When `preserve_module_ports = false`:::
+* Input and output ports are triplicated (with suffixes like `_a`, `_b`, `_c`).
+* Clock and reset ports may be shared or triplicated based on `expand_clock`/`expand_reset`.
+* Parent modules must connect to all three port variants.
+
+== Clock and Reset Handling
+
+[cols="2,1,2,3",options="header"]
+|===
+| Option | Type | Default | Description
+
+| `clock_port_names`
+| List
+| `["clk_i"]`
+| Names of clock ports
+
+| `reset_port_names`
+| List
+| `["rst_ni"]`
+| Names of reset ports
+
+| `expand_clock`
+| Bool
+| `false`
+| Triplicate the clock network
+
+| `expand_reset`
+| Bool
+| `false`
+| Triplicate the reset network
+|===
+
+[TIP]
+====
+Keep `expand_clock = false` and `expand_reset = false` unless you have specific requirements for clock/reset tree redundancy.
+====
+
+Clock and reset ports can also be identified using wire attributes `(* tmrx_clk_port *)` or `(* tmrx_rst_port *)` instead of name matching.
+
+== Flip-Flop Detection
+
+[cols="2,1,1,3",options="header"]
+|===
+| Option | Type | Default | Description
+
+| `ff_cells`
+| List
+| `[]`
+| Cell types to treat as flip-flops (extends auto-detection)
+
+| `additional_ff_cells`
+| List
+| `[]`
+| Add FF cells without overriding inherited `ff_cells`
+
+| `excluded_ff_cells`
+| List
+| `[]`
+| Cell types to exclude from FF treatment
+|===
+
+TMRX automatically detects Yosys built-in FF types.
+Use these options to fine-tune detection:
+
+[source,toml]
+----
+[global.logic]
+ff_cells = ["sg13g2_dfrbp_1"]
+
+[module.special.logic]
+additional_ff_cells = ["MY_CUSTOM_FF"]
+excluded_ff_cells = ["sg13g2_dfrbp_1"]
+----
+
+== Wire and Port Attributes
+
+[cols="1,3",options="header"]
+|===
+| Attribute | Description
+
+| `tmrx_clk_port`
+| Mark this wire as a clock signal
+
+| `tmrx_rst_port`
+| Mark this wire as a reset signal
+
+| `tmrx_error_sink`
+| Mark this output as the error aggregation point
+|===
+
+== Reserved Groups
+
+TMRX has built-in reserved groups that are automatically applied:
+
+`black_box_module`::
+Applied when a module has the `blackbox` attribute, contains memories (`has_memories`), or contains processes (`has_processes`).
+Default behavior: `tmr_mode = "FullModuleTMR"`.
+
+`cdc_module`::
+Intended for Clock Domain Crossing modules.
+Default behavior: `tmr_mode = "FullModuleTMR"`.
+
+[NOTE]
+====
+These groups are reserved.
+The automatic assignment behavior should not be relied upon to be overridden.
+====
