@@ -5,7 +5,11 @@ TMRX can aggregate error signals from all voters to a single output port for mon
 
 == Defining an Error Sink
 
-Mark an output port with the `tmrx_error_sink` attribute:
+There are three ways to designate an error sink port.
+
+=== Verilog Attribute
+
+Mark an output port directly in the source with the `tmrx_error_sink` attribute:
 
 [source,verilog]
 ----
@@ -21,22 +25,97 @@ module my_module (
 endmodule
 ----
 
+=== Configuration Option
+
+Specify the error sink port by name in the TOML configuration using `error_port_name`.
+This is useful when you cannot or do not want to modify the Verilog source:
+
+[source,toml]
+----
+[module.my_module]
+error_port_name = "err_o"
+----
+
+The equivalent Verilog attribute is `tmrx_error_port_name`:
+
+[source,verilog]
+----
+(* tmrx_error_port_name = "err_o" *)
+module my_module ( ... );
+----
+
+=== Automatic Error Port Creation
+
+When no explicit error sink is present, TMRX can create one automatically.
+Enable this with `auto_error_port`:
+
+[source,toml]
+----
+[global]
+auto_error_port = true
+----
+
+When enabled and voter errors exist, TMRX adds a new 1-bit output port named `tmrx_err_o` to the module and connects all aggregated voter errors to it.
+If there are no voter errors in a module, no port is created.
+
+The equivalent Verilog attribute is `tmrx_auto_error_port`:
+
+[source,verilog]
+----
+(* tmrx_auto_error_port = "1" *)
+module my_module ( ... );
+----
+
+[NOTE]
+====
+`auto_error_port` defaults to `false`.
+Enabling it globally is the simplest way to ensure every TMR-processed module exposes its errors without modifying Verilog source.
+====
+
 == How It Works
 
-. Each voter generates an error signal when inputs do not match.
-. All error signals within the module are OR'd together.
-. The combined error is connected to the `tmrx_error_sink` port.
-. If submodules also have error sinks, those are propagated up.
+. Each voter generates a 1-bit error signal when its inputs do not all agree.
+. All voter error signals within the module are OR'd together into a single aggregate error.
+. The aggregate error is driven onto the error sink port — whether defined by attribute, `error_port_name`, or auto-created.
+
+== Implicit Upward Propagation
+
+TMRX automatically propagates error signals up the module hierarchy.
+When a submodule has an error sink port (by any method above), the parent module collects that port's output as an additional error signal alongside its own voter errors.
+This collected child error is then aggregated into the parent's own error sink.
+
+This means a single top-level error port can capture voter disagreements from the entire design hierarchy without any manual wiring.
+
+[source,verilog]
+----
+// Child module — error exposed via attribute
+module alu (
+    input  wire [7:0] a_i,
+    input  wire [7:0] b_i,
+    output wire [7:0] result_o,
+    (* tmrx_error_sink *)
+    output wire err_o      // collected by parent automatically
+);
+
+// Parent module — receives child error implicitly
+module cpu (
+    input  wire clk_i,
+    input  wire rst_ni,
+    (* tmrx_error_sink *)
+    output wire err_o      // aggregates its own voters + alu.err_o
+);
+    alu u_alu ( ... );
+----
 
 == Behavior Without an Error Sink
 
-If no `tmrx_error_sink` is defined:
+If no error sink is defined and `auto_error_port = false`:
 
 * Voters still generate error signals internally.
-* Error signals are not connected (left floating).
+* Error signals are left unconnected.
 * No warning is generated.
 
 [TIP]
 ====
-Define an error sink for production designs to enable fault monitoring.
+For production designs, either mark an error sink port in every TMR module or enable `auto_error_port = true` globally to ensure all voter errors are observable.
 ====

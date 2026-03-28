@@ -1,0 +1,187 @@
+= Synthesis Flow Integration
+:description: How and where to integrate the tmrx_mark and tmrx passes into a Yosys synthesis flow.
+
+TMRX provides two Yosys passes that must be placed at specific points in your synthesis flow.
+Understanding what each pass does internally explains why their placement matters.
+
+== The tmrx_mark Pass
+
+=== Purpose
+
+`tmrx_mark` performs two bookkeeping tasks that the later `tmrx` pass depends on:
+
+. *Flip-flop source recording* — identifies which cells are flip-flops and records their original source location.
+. *Submodule marking* — marks which modules are instantiated as submodules within other modules.
+
+=== Flip-Flop Source Recording
+
+TMRX must insert voters after flip-flop outputs.
+The challenge is that technology mapping (`dfflibmap`, `abc`) replaces Yosys built-in FF cells (such as `$dff`, `$dffe`, `$sdff`) with library-specific cells (such as `sg13g2_dfrbp_1`).
+After mapping, there are no longer any built-in FF types in the netlist — only opaque library cells.
+
+`tmrx_mark` solves this by running *before* technology mapping, while the built-in FF types are still present.
+For every module it scans, it records the `src` (source location) attribute of each built-in FF cell into a global lookup table.
+This attribute is preserved by `dfflibmap` and `abc` when they replace the cell type.
+
+When the `tmrx` pass later calls `isFlipFlop()` on a library cell, it checks:
+
+. Is the cell type a built-in Yosys FF? (catches any FFs not yet mapped)
+. Does the cell's `src` attribute appear in the `ffSources` table recorded by `tmrx_mark`? (catches mapped library cells that originated from FFs)
+. Is the cell type listed in `ff_cells` or `additional_ff_cells` from the configuration?
+
+This three-step check allows reliable FF identification after technology mapping.
+
+=== Submodule Marking
+
+For each cell in a module whose type resolves to another module in the design, `tmrx_mark` sets the `tmrx_is_proper_submodule` attribute on that module.
+This attribute is the mechanism by which `tmrx` distinguishes between instantiated design modules (which need hierarchical port handling) and primitive or black-box cells (which do not).
+
+=== Placement
+
+[source]
+----
+proc; opt
+techmap
+tmrx_mark          # <-- HERE: after techmap, before dfflibmap/abc
+read_liberty -lib cells.lib
+dfflibmap -liberty cells.lib
+abc -liberty cells.lib
+----
+
+Running `tmrx_mark` before `dfflibmap`/`abc` is mandatory.
+If it runs after, the built-in FF types are already gone and the source table will be empty, causing TMRX to miss every flip-flop.
+
+== The tmrx Pass
+
+=== Purpose
+
+`tmrx` is the main expansion pass.
+It reads the configuration, determines the TMR strategy for each module, and transforms the design in-place.
+
+=== Topological Processing Order
+
+Before any expansion begins, `tmrx` builds a dependency graph of the selected modules and sorts them topologically.
+Modules are then processed in *leaf-first order* (deepest submodules first, top-level module last).
+
+This order is essential.
+When a parent module is processed, its child modules must already be expanded because the child's port interface may have changed (for example, ports may now be triplicated).
+The parent needs to see the final interface of each child to wire it correctly.
+
+Black-box modules (standard cells, IP blocks) are excluded from processing entirely — they appear only as dependency edges in the graph, never as nodes to expand.
+
+=== Module Cloning for Port-Preserving Expansion
+
+When `preserve_module_ports = false` and a module is a proper submodule (marked by `tmrx_mark`), `tmrx` does not expand the module in-place.
+Instead, it:
+
+. Creates a clone of the module with a `_tmrx_impl` suffix.
+. Expands the clone (which receives the triplicated ports and internals).
+. Leaves the original module interface unchanged.
+. Sets the `tmrx_impl_module` attribute on the original so parent modules know to wire to the clone.
+
+The original module is only kept if a `None`-mode parent still references it directly.
+Otherwise it is removed from the design after all processing is complete.
+
+This mechanism allows a module to be used in two ways simultaneously: with its original interface (by any non-TMR parent) and with its expanded interface (by any TMR parent that was also processed by `tmrx`).
+
+=== Dispatch to TMR Strategy
+
+After resolving the target module, `tmrx` dispatches to one of two implementations based on `tmr_mode`:
+
+`LogicTMR`:: Calls `logicTmrExpansion`, which triplicates all wires and cells inside the module, reconnects submodule ports across all three paths, inserts voters after FFs, and aggregates error signals.
+
+`FullModuleTMR`:: Calls `fullModuleTmrExpansion`, which renames the module to a `_tmrx_worker` variant, creates a new wrapper module with the original name, instantiates three worker copies inside the wrapper, and inserts voters at the module boundaries.
+
+=== Placement
+
+[source]
+----
+dfflibmap -liberty cells.lib
+abc -liberty cells.lib
+tmrx -c config.toml   # <-- HERE: after dfflibmap/abc, before final tech mapping
+opt -noff
+techmap
+dfflibmap -liberty cells.lib
+abc -liberty cells.lib
+----
+
+`tmrx` must run after technology mapping for two reasons:
+
+. FF identification relies on the `ffSources` table populated by `tmrx_mark`, which matches library cells by their preserved `src` attribute — this only works after `dfflibmap` has run.
+. The voters and any new logic inserted by `tmrx` are initially represented as abstract Yosys cells.
+  The final `techmap`/`dfflibmap`/`abc` run after `tmrx` maps those cells to library primitives.
+
+== Complete Synthesis Flow
+
+The following is the recommended full synthesis flow with both TMRX passes in context:
+
+[source]
+----
+# 1. Read design
+plugin -i /path/to/tmrx.so
+read_verilog my_design.v        # or: read_slang --top top design.sv
+hierarchy -check -top top
+
+# 2. Pre-synthesis
+proc
+opt
+techmap
+
+# 3. Mark FFs and submodules (must run before dfflibmap/abc)
+tmrx_mark
+
+# 4. Technology mapping
+read_liberty -lib cells.lib
+dfflibmap -liberty cells.lib
+abc -liberty cells.lib
+
+# 5. Apply TMR (must run after dfflibmap/abc, before final mapping)
+tmrx -c tmrx_config.toml
+
+# 6. Map voter logic and optimize
+opt -noff
+techmap
+dfflibmap -liberty cells.lib
+abc -liberty cells.lib
+
+# 7. Cleanup and output
+opt_clean -purge
+clean
+write_verilog -noattr output.v
+----
+
+== Using Yosys Selection
+
+Both passes respect the Yosys selection mechanism.
+You can limit processing to specific modules using standard Yosys `select` commands:
+
+[source]
+----
+# Only mark and expand the datapath module
+select datapath
+tmrx_mark
+select -clear
+
+# ... technology mapping ...
+
+select datapath
+tmrx -c config.toml
+select -clear
+----
+
+This is useful when only part of a design needs TMR, or when debugging a single module in isolation.
+
+== Constraints Summary
+
+[cols="1,2,2",options="header"]
+|===
+| Pass | Must Run After | Must Run Before
+
+| `tmrx_mark`
+| `proc`, `opt`, `techmap`
+| `dfflibmap`, `abc`
+
+| `tmrx`
+| `dfflibmap`, `abc` (post-mark)
+| Final `techmap`, `dfflibmap`, `abc`
+|===

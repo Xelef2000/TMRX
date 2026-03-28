@@ -1,0 +1,28 @@
+<header class="header">
+  <nav class="navbar">
+    <div class="navbar-brand">
+      <button class="navbar-burger" aria-controls="topbar-nav" aria-expanded="false" aria-label="Menu" data-target="topbar-nav">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <a class="navbar-item" href="{{{or site.url '#'}}}">{{site.title}}</a>
+    </div>
+    <div id="topbar-nav" class="navbar-menu">
+      <div class="navbar-end">
+        {{#if page.versions}}
+        <div class="navbar-item has-dropdown is-hoverable">
+          {{#with page.versions}}
+          <a class="navbar-link" href="#">{{this.[0].version}}</a>
+          <div class="navbar-dropdown">
+            {{#each this}}
+            <a class="navbar-item{{#if missing}} is-missing{{/if}}" href="{{withoutHost url}}">{{version}}</a>
+            {{/each}}
+          </div>
+          {{/with}}
+        </div>
+        {{/if}}
+      </div>
+    </div>
+  </nav>
+</header>
