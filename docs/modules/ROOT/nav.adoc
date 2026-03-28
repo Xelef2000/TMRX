@@ -3,7 +3,6 @@
 * xref:quick-start.adoc[Quick Start]
 * xref:tmr-strategies.adoc[TMR Strategies]
 * xref:yosys-integration.adoc[Yosys Integration]
-* xref:synthesis-flow.adoc[Synthesis Flow Integration]
 * xref:configuration.adoc[Configuration]
 * xref:configuration-reference.adoc[Configuration Reference]
 * xref:error-detection.adoc[Error Detection]
