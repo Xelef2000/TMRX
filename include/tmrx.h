@@ -17,7 +17,11 @@
 
 YOSYS_NAMESPACE_BEGIN
 
-extern dict<RTLIL::IdString, pool<std::string>> ff_sources;
+namespace TMRX {
+
+extern dict<RTLIL::IdString, pool<std::string>> ffSources;
+
+} // namespace TMRX
 
 YOSYS_NAMESPACE_END
 
