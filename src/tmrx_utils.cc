@@ -10,18 +10,18 @@ YOSYS_NAMESPACE_BEGIN
 
 namespace TMRX {
 
-bool is_proper_submodule(RTLIL::Module *mod) {
+bool isProperSubmodule(RTLIL::Module *mod) {
     // TODO: find alternative
-    if ((mod != nullptr) && mod->has_attribute(ID(tmrx_is_proper_submodule))) {
-        return mod->get_bool_attribute(ID(tmrx_is_proper_submodule));
+    if ((mod != nullptr) && mod->has_attribute(ATTRIBUTE_IS_PROPER_SUBMODULE)) {
+        return mod->get_bool_attribute(ATTRIBUTE_IS_PROPER_SUBMODULE);
     }
 
     return false;
 }
 
-bool is_flip_flop(const RTLIL::Cell *cell, const RTLIL::Module *module, const Config *cfg) {
+bool isFlipFlop(const RTLIL::Cell *cell, const RTLIL::Module *module, const Config *cfg) {
 
-    if (cfg->excluded_ff_cells.count(cell->type) != 0) {
+    if (cfg->excludedFfCells.count(cell->type) != 0) {
         return false;
     }
 
@@ -30,11 +30,11 @@ bool is_flip_flop(const RTLIL::Cell *cell, const RTLIL::Module *module, const Co
     }
 
     std::string src = cell->get_string_attribute(ID::src);
-    if (ff_sources[module->name].count(src) > 0) {
+    if (ffSources[module->name].count(src) > 0) {
         return true;
     }
 
-    if (cfg->ff_cells.count(cell->type) > 0 || cfg->additional_ff_cells.count(cell->type) > 0) {
+    if (cfg->ffCells.count(cell->type) > 0 || cfg->additionalFfCells.count(cell->type) > 0) {
         return true;
     }
 
@@ -43,32 +43,32 @@ bool is_flip_flop(const RTLIL::Cell *cell, const RTLIL::Module *module, const Co
 
 // Move ids to header
 //  TODO: check attr if it is a submodule port
-bool is_clk_wire(const RTLIL::Wire *w, const Config *cfg) {
-    return ((cfg->clock_port_names.count(w->name) != 0) || w->has_attribute(ID(tmrx_clk_port)));
+bool isClkWire(const RTLIL::Wire *w, const Config *cfg) {
+    return ((cfg->clockPortNames.count(w->name) != 0) || w->has_attribute(ATTRIBUTE_CLK_PORT));
 }
 
-bool is_clk_wire(RTLIL::IdString port, const Config *cfg) {
-    return (cfg->clock_port_names.count(port) != 0);
+bool isClkWire(RTLIL::IdString port, const Config *cfg) {
+    return (cfg->clockPortNames.count(port) != 0);
 }
 
-bool is_rst_wire(RTLIL::IdString port, const Config *cfg) {
-    return (cfg->reset_port_names.count(port) != 0);
+bool isRstWire(RTLIL::IdString port, const Config *cfg) {
+    return (cfg->resetPortNames.count(port) != 0);
 }
 
-bool is_rst_wire(const RTLIL::Wire *w, const Config *cfg) {
-    return ((cfg->reset_port_names.count(w->name) != 0) || w->has_attribute(ID(tmrx_rst_port)));
+bool isRstWire(const RTLIL::Wire *w, const Config *cfg) {
+    return ((cfg->resetPortNames.count(w->name) != 0) || w->has_attribute(ATTRIBUTE_RST_PORT));
 }
 
-bool is_tmr_error_out_wire(RTLIL::Wire *w, const Config *cfg) {
-    if (w->has_attribute(ID(tmrx_error_sink)))
+bool isTmrErrorOutWire(RTLIL::Wire *w, const Config *cfg) {
+    if (w->has_attribute(ATTRIBUTE_ERROR_SINK))
         return true;
-    if (cfg && !cfg->error_port_name.empty())
-        return w->name == RTLIL::IdString("\\" + cfg->error_port_name);
+    if (cfg && !cfg->errorPortName.empty())
+        return w->name == makeRtlilId(cfg->errorPortName);
     return false;
 }
 
 std::pair<std::vector<RTLIL::IdString>, std::vector<RTLIL::IdString>>
-get_port_names(const RTLIL::Cell *cell, const RTLIL::Design *design) {
+getPortNames(const RTLIL::Cell *cell, const RTLIL::Design *design) {
     std::vector<RTLIL::IdString> outputs = {};
     std::vector<RTLIL::IdString> inputs = {};
 
@@ -99,7 +99,7 @@ get_port_names(const RTLIL::Cell *cell, const RTLIL::Design *design) {
     return {inputs, outputs};
 }
 
-static std::string get_signal_name(const RTLIL::SigSpec &sig) {
+static std::string getSignalName(const RTLIL::SigSpec &sig) {
     for (const auto &chunk : sig.chunks()) {
         if (chunk.wire != nullptr) {
             std::string name = chunk.wire->name.str();
@@ -108,11 +108,13 @@ static std::string get_signal_name(const RTLIL::SigSpec &sig) {
             return name;
         }
     }
-    return "const";
+    return tmrx_signal_name_const;
 }
 
-RTLIL::IdString createVoterCell(RTLIL::Design *design, size_t wire_width, const std::string &name_prefix) {
-    RTLIL::IdString voter_name = "\\tmrx_voter_" + name_prefix + "_w" + std::to_string(wire_width);
+RTLIL::IdString createVoterCell(RTLIL::Design *design, size_t wire_width,
+                                const std::string &name_prefix) {
+    RTLIL::IdString voter_name = std::string(tmrx_voter_module_prefix) + name_prefix +
+                                 tmrx_voter_width_separator + std::to_string(wire_width);
 
     if (design->module(voter_name) != nullptr) {
         return voter_name;
@@ -122,16 +124,16 @@ RTLIL::IdString createVoterCell(RTLIL::Design *design, size_t wire_width, const 
 
     voter->attributes[ID::keep_hierarchy] = RTLIL::State::S1;
 
-    RTLIL::Wire *in_a = voter->addWire("\\a", wire_width);
-    RTLIL::Wire *in_b = voter->addWire("\\b", wire_width);
-    RTLIL::Wire *in_c = voter->addWire("\\c", wire_width);
+    RTLIL::Wire *in_a = voter->addWire(tmrx_voter_port_a_id, wire_width);
+    RTLIL::Wire *in_b = voter->addWire(tmrx_voter_port_b_id, wire_width);
+    RTLIL::Wire *in_c = voter->addWire(tmrx_voter_port_c_id, wire_width);
     in_c->port_input = true;
     in_a->port_input = true;
     in_b->port_input = true;
 
-    RTLIL::Wire *out_y = voter->addWire("\\y", wire_width);
+    RTLIL::Wire *out_y = voter->addWire(tmrx_voter_port_y_id, wire_width);
     out_y->port_output = true;
-    RTLIL::Wire *out_err = voter->addWire("\\err", wire_width);
+    RTLIL::Wire *out_err = voter->addWire(tmrx_voter_port_err_id, wire_width);
     out_err->port_output = true;
 
     RTLIL::SigSpec pair1 = voter->And(NEW_ID, in_a, in_b);
@@ -156,13 +158,13 @@ RTLIL::IdString createVoterCell(RTLIL::Design *design, size_t wire_width, const 
 static RTLIL::IdString createCustomVoterCell(RTLIL::Design *design,
                                              const std::string &template_module,
                                              const std::string &name_prefix) {
-    RTLIL::IdString unique_name =
-        RTLIL::IdString("\\tmrx_voter_" + name_prefix + "_w1");
+    RTLIL::IdString unique_name = std::string(tmrx_voter_module_prefix) + name_prefix +
+                                  tmrx_voter_width_separator + std::to_string(1);
 
     if (design->module(unique_name) != nullptr)
         return unique_name;
 
-    RTLIL::IdString template_id = RTLIL::IdString("\\" + template_module);
+    RTLIL::IdString template_id = makeRtlilId(template_module);
     RTLIL::Module *tmpl = design->module(template_id);
     if (tmpl == nullptr)
         log_error("Custom voter template module '%s' not found in design.\n",
@@ -176,7 +178,8 @@ static RTLIL::IdString createCustomVoterCell(RTLIL::Design *design,
     return unique_name;
 }
 
-static bool is_port_output(const RTLIL::Cell *cell, RTLIL::IdString port_name, RTLIL::Design *design) {
+static bool isPortOutput(const RTLIL::Cell *cell, RTLIL::IdString port_name,
+                         RTLIL::Design *design) {
     RTLIL::Module *cell_mod = design->module(cell->type);
     if (cell_mod) {
         cell_mod->fixup_ports();
@@ -188,7 +191,7 @@ static bool is_port_output(const RTLIL::Cell *cell, RTLIL::IdString port_name, R
     return cell->output(port_name);
 }
 
-static bool is_signal_unconnected(const RTLIL::SigSpec &sig, RTLIL::Module *module) {
+static bool isSignalUnconnected(const RTLIL::SigSpec &sig, RTLIL::Module *module) {
     if (sig.is_fully_const()) {
         for (auto &bit : sig.bits()) {
             if (bit.data == RTLIL::State::Sx || bit.data == RTLIL::State::Sz) {
@@ -212,7 +215,7 @@ static bool is_signal_unconnected(const RTLIL::SigSpec &sig, RTLIL::Module *modu
 
     for (auto cell : module->cells()) {
         for (auto &conn : cell->connections()) {
-            if (is_port_output(cell, conn.first, design)) {
+            if (isPortOutput(cell, conn.first, design)) {
                 for (auto &bit : conn.second.bits()) {
                     if (bit.wire != nullptr) {
                         driven_bits.insert(bit);
@@ -239,7 +242,7 @@ static bool is_signal_unconnected(const RTLIL::SigSpec &sig, RTLIL::Module *modu
     return false;
 }
 
-static bool is_signal_constant(const RTLIL::SigSpec &sig) {
+static bool isSignalConstant(const RTLIL::SigSpec &sig) {
     if (!sig.is_fully_const()) {
         return false;
     }
@@ -252,38 +255,41 @@ static bool is_signal_constant(const RTLIL::SigSpec &sig) {
 }
 
 std::pair<RTLIL::Wire *, RTLIL::Wire *>
-insert_voter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, const Config *cfg) {
-    if (inputs.size() != 3) {
-        log_error("Voters are only intended to be inserted with 3 inputs\n");
+insertVoter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, const Config *cfg) {
+    if (inputs.size() != tmrx_replication_factor) {
+        log_error("Voters are only intended to be inserted with %zu inputs\n",
+                  tmrx_replication_factor);
     }
 
     RTLIL::Design *design = module->design;
     size_t wire_width = inputs.at(0).size();
 
-    std::string sig_name_a = get_signal_name(inputs.at(0));
-    std::string sig_name_b = get_signal_name(inputs.at(1));
-    std::string sig_name_c = get_signal_name(inputs.at(2));
+    std::string sig_name_a = getSignalName(inputs.at(0));
+    std::string sig_name_b = getSignalName(inputs.at(1));
+    std::string sig_name_c = getSignalName(inputs.at(2));
 
-    std::string mod_name = module->name.str();
-    if (!mod_name.empty() && mod_name[0] == '\\')
-        mod_name = mod_name.substr(1);
+    std::string modName = module->name.str();
+    if (!modName.empty() && modName[0] == '\\')
+        modName = modName.substr(1);
 
-    std::string name_prefix =
-        mod_name + "_" + sig_name_a + "_" + sig_name_b + "_" + sig_name_c;
+    std::string name_prefix = modName + tmrx_signal_name_separator + sig_name_a +
+                              tmrx_signal_name_separator + sig_name_b + tmrx_signal_name_separator +
+                              sig_name_c;
 
-    if (cfg->tmr_voter_safe_mode) {
-        std::vector<std::string> input_names = {"a", "b", "c"};
-        for (size_t i = 0; i < 3; i++) {
+    if (cfg->tmrVoterSafeMode) {
+        for (size_t i = 0; i < tmrx_replication_factor; i++) {
             const RTLIL::SigSpec &sig = inputs.at(i);
-            if (is_signal_unconnected(sig, module)) {
-                log_error("TMRX Safe Mode: Voter input '%s' in module '%s' is not connected (signal: %s). "
+            if (isSignalUnconnected(sig, module)) {
+                log_error("TMRX Safe Mode: Voter input '%s' in module '%s' is not connected "
+                          "(signal: %s). "
                           "All voter inputs must be driven.\n",
-                          input_names[i].c_str(), module->name.c_str(), log_signal(sig));
+                          tmrx_voter_input_labels[i], module->name.c_str(), log_signal(sig));
             }
-            if (is_signal_constant(sig)) {
-                log_warning("TMRX Safe Mode: Voter input '%s' in module '%s' is connected to a constant value (signal: %s). "
+            if (isSignalConstant(sig)) {
+                log_warning("TMRX Safe Mode: Voter input '%s' in module '%s' is connected to a "
+                            "constant value (signal: %s). "
                             "This may indicate a configuration or connection issue.\n",
-                            input_names[i].c_str(), module->name.c_str(), log_signal(sig));
+                            tmrx_voter_input_labels[i], module->name.c_str(), log_signal(sig));
             }
         }
     } else {
@@ -292,7 +298,7 @@ insert_voter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, c
         if (sigmap(inputs.at(0)) == sigmap(inputs.at(1)) &&
             sigmap(inputs.at(1)) == sigmap(inputs.at(2))) {
             RTLIL::Wire *last_wire = module->addWire(NEW_ID, wire_width);
-            RTLIL::Wire *err_wire  = module->addWire(NEW_ID, 1);
+            RTLIL::Wire *err_wire = module->addWire(NEW_ID, 1);
             module->connect(last_wire, inputs.at(0));
             module->connect(err_wire, RTLIL::SigSpec(RTLIL::State::S0, 1));
             return {last_wire, err_wire};
@@ -301,9 +307,10 @@ insert_voter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, c
 
     // Resolve the 1-bit voter cell: both paths produce a uniquely named module
     // following the \tmrx_voter_<prefix>_w1 convention.
-    RTLIL::IdString voter_1bit = (cfg->tmr_voter == TmrVoter::Custom)
-        ? createCustomVoterCell(design, cfg->tmr_voter_module, name_prefix)
-        : createVoterCell(design, 1, name_prefix);
+    RTLIL::IdString voter_1bit =
+        (cfg->tmrVoter == TmrVoter::Custom)
+            ? createCustomVoterCell(design, cfg->tmrVoterModule, name_prefix)
+            : createVoterCell(design, 1, name_prefix);
 
     RTLIL::SigSpec output_bits;
     RTLIL::SigSpec error_bits;
@@ -315,24 +322,24 @@ insert_voter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, c
     RTLIL::IdString voter_rst_port;
 
     if (voter_mod_ptr) {
-        if (!cfg->tmr_voter_clock_port_name.empty()) {
-            voter_clk_port = RTLIL::IdString("\\" + cfg->tmr_voter_clock_port_name);
+        if (!cfg->tmrVoterClockPortName.empty()) {
+            voter_clk_port = makeRtlilId(cfg->tmrVoterClockPortName);
         } else {
             for (auto port_id : voter_mod_ptr->ports) {
                 RTLIL::Wire *pw = voter_mod_ptr->wire(port_id);
-                if (pw && pw->port_input && pw->has_attribute(ID(tmrx_clk_port))) {
+                if (pw && pw->port_input && pw->has_attribute(ATTRIBUTE_CLK_PORT)) {
                     voter_clk_port = port_id;
                     break;
                 }
             }
         }
 
-        if (!cfg->tmr_voter_reset_port_name.empty()) {
-            voter_rst_port = RTLIL::IdString("\\" + cfg->tmr_voter_reset_port_name);
+        if (!cfg->tmrVoterResetPortName.empty()) {
+            voter_rst_port = makeRtlilId(cfg->tmrVoterResetPortName);
         } else {
             for (auto port_id : voter_mod_ptr->ports) {
                 RTLIL::Wire *pw = voter_mod_ptr->wire(port_id);
-                if (pw && pw->port_input && pw->has_attribute(ID(tmrx_rst_port))) {
+                if (pw && pw->port_input && pw->has_attribute(ATTRIBUTE_RST_PORT)) {
                     voter_rst_port = port_id;
                     break;
                 }
@@ -347,16 +354,16 @@ insert_voter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, c
     RTLIL::Wire *parent_rst_wire = nullptr;
 
     if (!voter_clk_port.empty()) {
-        if (!cfg->tmr_voter_clock_net.empty()) {
-            parent_clk_wire = module->wire("\\" + cfg->tmr_voter_clock_net);
+        if (!cfg->tmrVoterClockNet.empty()) {
+            parent_clk_wire = module->wire(makeRtlilId(cfg->tmrVoterClockNet));
             if (!parent_clk_wire)
                 log_warning("Custom voter '%s': tmr_voter_clock_net '%s' not found in "
                             "parent module '%s'.\n",
-                            voter_1bit.c_str(), cfg->tmr_voter_clock_net.c_str(),
+                            voter_1bit.c_str(), cfg->tmrVoterClockNet.c_str(),
                             module->name.c_str());
         } else {
             for (auto wire : module->wires()) {
-                if (wire->port_input && is_clk_wire(wire, cfg)) {
+                if (wire->port_input && isClkWire(wire, cfg)) {
                     parent_clk_wire = wire;
                     break;
                 }
@@ -364,22 +371,21 @@ insert_voter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, c
             if (!parent_clk_wire)
                 log_warning("Custom voter '%s': clock port '%s' specified but no clock "
                             "wire found in parent module '%s'.\n",
-                            voter_1bit.c_str(), voter_clk_port.c_str(),
-                            module->name.c_str());
+                            voter_1bit.c_str(), voter_clk_port.c_str(), module->name.c_str());
         }
     }
 
     if (!voter_rst_port.empty()) {
-        if (!cfg->tmr_voter_reset_net.empty()) {
-            parent_rst_wire = module->wire("\\" + cfg->tmr_voter_reset_net);
+        if (!cfg->tmrVoterResetNet.empty()) {
+            parent_rst_wire = module->wire(makeRtlilId(cfg->tmrVoterResetNet));
             if (!parent_rst_wire)
                 log_warning("Custom voter '%s': tmr_voter_reset_net '%s' not found in "
                             "parent module '%s'.\n",
-                            voter_1bit.c_str(), cfg->tmr_voter_reset_net.c_str(),
+                            voter_1bit.c_str(), cfg->tmrVoterResetNet.c_str(),
                             module->name.c_str());
         } else {
             for (auto wire : module->wires()) {
-                if (wire->port_input && is_rst_wire(wire, cfg)) {
+                if (wire->port_input && isRstWire(wire, cfg)) {
                     parent_rst_wire = wire;
                     break;
                 }
@@ -387,8 +393,7 @@ insert_voter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, c
             if (!parent_rst_wire)
                 log_warning("Custom voter '%s': reset port '%s' specified but no reset "
                             "wire found in parent module '%s'.\n",
-                            voter_1bit.c_str(), voter_rst_port.c_str(),
-                            module->name.c_str());
+                            voter_1bit.c_str(), voter_rst_port.c_str(), module->name.c_str());
         }
     }
 
@@ -397,11 +402,11 @@ insert_voter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, c
         RTLIL::Wire *bit_err = module->addWire(NEW_ID, 1);
 
         RTLIL::Cell *voter_inst = module->addCell(NEW_ID, voter_1bit);
-        voter_inst->setPort("\\a", inputs.at(0).extract(bit, 1));
-        voter_inst->setPort("\\b", inputs.at(1).extract(bit, 1));
-        voter_inst->setPort("\\c", inputs.at(2).extract(bit, 1));
-        voter_inst->setPort("\\y", bit_out);
-        voter_inst->setPort("\\err", bit_err);
+        voter_inst->setPort(tmrx_voter_port_a_id, inputs.at(0).extract(bit, 1));
+        voter_inst->setPort(tmrx_voter_port_b_id, inputs.at(1).extract(bit, 1));
+        voter_inst->setPort(tmrx_voter_port_c_id, inputs.at(2).extract(bit, 1));
+        voter_inst->setPort(tmrx_voter_port_y_id, bit_out);
+        voter_inst->setPort(tmrx_voter_port_err_id, bit_err);
 
         if (!voter_clk_port.empty() && parent_clk_wire)
             voter_inst->setPort(voter_clk_port, parent_clk_wire);
@@ -427,28 +432,28 @@ insert_voter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, c
     return {last_wire, err_wire};
 }
 
-void connect_error_signal(RTLIL::Module *mod, const std::vector<RTLIL::Wire *> &error_signals,
-                          const Config *cfg) {
+void connectErrorSignal(RTLIL::Module *mod, const std::vector<RTLIL::Wire *> &error_signals,
+                        const Config *cfg) {
 
     RTLIL::Wire *sink = nullptr;
     for (auto w : mod->wires()) {
         if (!w->port_output) {
             continue;
         }
-        if (is_tmr_error_out_wire(w, cfg)) {
+        if (isTmrErrorOutWire(w, cfg)) {
             if (sink != nullptr) {
                 log_error("Duplicate error sinks, only one allowed");
             }
             sink = w;
         }
     }
-    if (sink == nullptr && cfg->auto_error_port && !error_signals.empty()) {
-        RTLIL::IdString port_name = mod->uniquify("\\tmrx_err_o");
+    if (sink == nullptr && cfg->autoErrorPort && !error_signals.empty()) {
+        RTLIL::IdString port_name = mod->uniquify(tmrx_auto_error_port_name);
         RTLIL::Wire *new_port = mod->addWire(port_name, 1);
         new_port->port_output = true;
         mod->fixup_ports();
-        log("  Auto-created error port '%s' in module '%s'\n",
-            port_name.c_str(), mod->name.c_str());
+        log("  Auto-created error port '%s' in module '%s'\n", port_name.c_str(),
+            mod->name.c_str());
 
         RTLIL::SigSpec aggregated = RTLIL::State::S0;
         for (auto s : error_signals) {
@@ -477,5 +482,5 @@ void connect_error_signal(RTLIL::Module *mod, const std::vector<RTLIL::Wire *> &
         mod->connect(new_error, last_wire);
     }
 }
-}
+} // namespace TMRX
 YOSYS_NAMESPACE_END

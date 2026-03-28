@@ -27,41 +27,40 @@ struct TmrxPass : public Pass {
         log_header(design, "Executing TMRX pass (Triple Modular Redundancy).\n");
         log_push();
 
-        std::string config_file = "";
+        std::string configFile = "";
 
         for (size_t arg = 1; arg < args.size(); arg++) {
             if (args[arg] == "-c" && arg + 1 < args.size()) {
-                config_file = args[++arg];
+                configFile = args[++arg];
                 continue;
             }
             break;
         }
 
-        ConfigManager cfg_mgr(design, config_file);
+        TMRX::ConfigManager cfgMgr(design, configFile);
 
-        TopoSort<RTLIL::IdString> modules_to_process;
+        TopoSort<RTLIL::IdString> modulesToProcess;
 
         for (auto module : design->modules()) {
             if (!design->selected(module) || module->get_blackbox_attribute()) {
                 continue;
             }
 
-            modules_to_process.node(module->name);
+            modulesToProcess.node(module->name);
 
             for (auto c : module->cells()) {
-                if (design->module(c->type) &&
-                    (TMRX::is_proper_submodule(design->module(c->type)))) {
-                    modules_to_process.edge(module->name, c->type);
+                if (design->module(c->type) && (TMRX::isProperSubmodule(design->module(c->type)))) {
+                    modulesToProcess.edge(module->name, c->type);
                 }
             }
         }
 
-        modules_to_process.sort();
+        modulesToProcess.sort();
 
-        for (auto it = modules_to_process.sorted.rbegin(); it != modules_to_process.sorted.rend();
+        for (auto it = modulesToProcess.sorted.rbegin(); it != modulesToProcess.sorted.rend();
              ++it) {
-            RTLIL::IdString mod_name = *it;
-            RTLIL::Module *worker = design->module(mod_name);
+            RTLIL::IdString moduleName = *it;
+            RTLIL::Module *worker = design->module(moduleName);
             if (!worker)
                 continue;
 
@@ -71,14 +70,14 @@ struct TmrxPass : public Pass {
             if (worker->get_blackbox_attribute())
                 continue;
 
-            const Config *cfg = cfg_mgr.cfg(worker);
+            const TMRX::Config *cfg = cfgMgr.getConfig(worker);
 
-            if (cfg->tmr_mode == TmrMode::None) {
+            if (cfg->tmrMode == TMRX::TmrMode::None) {
                 continue;
             }
 
-            log("Processing module '%s' [%s]\n", mod_name.c_str(),
-                tmr_mode_to_string(cfg->tmr_mode).c_str());
+            log("Processing module '%s' [%s]\n", moduleName.c_str(),
+                TMRX::tmrModeToString(cfg->tmrMode).c_str());
 
             // When preserve_module_ports=false and this is a proper submodule,
             // clone the module before expansion. The clone is what gets expanded
@@ -87,29 +86,29 @@ struct TmrxPass : public Pass {
             // port mismatches. LogicTMR parents remap cell types to the clone
             // via the tmrx_impl_module attribute.
             RTLIL::Module *target = worker;
-            if (!cfg->preserve_module_ports && TMRX::is_proper_submodule(worker)) {
-                RTLIL::IdString impl_name =
-                    RTLIL::IdString(worker->name.str() + "_tmrx_impl");
-                target = design->addModule(impl_name);
+            if (!cfg->preserveModulePorts && TMRX::isProperSubmodule(worker)) {
+                RTLIL::IdString implName =
+                    RTLIL::IdString(worker->name.str() + TMRX::tmrx_impl_module_suffix);
+                target = design->addModule(implName);
                 worker->cloneInto(target);
-                target->name = impl_name;
-                target->set_bool_attribute(ID(tmrx_is_proper_submodule), true);
-                worker->set_string_attribute(ID(tmrx_impl_module), impl_name.str());
-                log("  Cloned '%s' -> '%s' for port-preserving expansion\n",
-                    worker->name.c_str(), impl_name.c_str());
+                target->name = implName;
+                target->set_bool_attribute(TMRX::ATTRIBUTE_IS_PROPER_SUBMODULE, true);
+                worker->set_string_attribute(TMRX::ATTRIBUTE_IMPL_MODULE, implName.str());
+                log("  Cloned '%s' -> '%s' for port-preserving expansion\n", worker->name.c_str(),
+                    implName.c_str());
             }
 
-            if (cfg->tmr_mode == TmrMode::LogicTMR) {
-                TMRX::logic_tmr_expansion(target, &cfg_mgr, cfg);
+            if (cfg->tmrMode == TMRX::TmrMode::LogicTMR) {
+                TMRX::logicTmrExpansion(target, &cfgMgr, cfg);
                 target->fixup_ports();
             }
 
-            if (cfg->tmr_mode == TmrMode::FullModuleTMR) {
-                // full_module_tmr_expansion removes `target` (the _tmrx_worker
+            if (cfg->tmrMode == TMRX::TmrMode::FullModuleTMR) {
+                // fullModuleTmrExpansion removes `target` (the _tmrx_worker
                 // template) from the design at the end, so `target` is a
                 // dangling pointer after the call. The wrapper module created
                 // inside already calls fixup_ports() before that point.
-                TMRX::full_module_tmr_expansion(target, cfg);
+                TMRX::fullModuleTmrExpansion(target, cfg);
             }
         }
 
@@ -122,30 +121,29 @@ struct TmrxPass : public Pass {
         // references are safe to delete (keeping them would cause the stat
         // crash described above, because stat only builds mod_stat for modules
         // reachable from the top).
-        std::vector<RTLIL::IdString> to_remove;
+        std::vector<RTLIL::IdString> toRemove;
         for (auto module : design->modules()) {
-            if (module->has_attribute(ID(tmrx_impl_module))) {
-                to_remove.push_back(module->name);
+            if (module->has_attribute(TMRX::ATTRIBUTE_IMPL_MODULE)) {
+                toRemove.push_back(module->name);
             }
         }
-        for (auto name : to_remove) {
-            bool still_referenced = false;
+        for (auto name : toRemove) {
+            bool stillReferenced = false;
             for (auto mod : design->modules()) {
                 for (auto cell : mod->cells()) {
                     if (cell->type == name) {
-                        still_referenced = true;
+                        stillReferenced = true;
                         break;
                     }
                 }
-                if (still_referenced)
+                if (stillReferenced)
                     break;
             }
-            if (still_referenced) {
+            if (stillReferenced) {
                 log("Keeping original module '%s' (still referenced by None-mode parent)\n",
                     name.c_str());
             } else {
-                log("Removing original module '%s' (replaced by _tmrx_impl clone)\n",
-                    name.c_str());
+                log("Removing original module '%s' (replaced by _tmrx_impl clone)\n", name.c_str());
                 design->remove(design->module(name));
             }
         }

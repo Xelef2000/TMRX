@@ -7,24 +7,25 @@
 YOSYS_NAMESPACE_BEGIN
 namespace TMRX {
 
-bool is_proper_submodule(RTLIL::Module *mod);
-bool is_flip_flop(const RTLIL::Cell *cell, const RTLIL::Module *module, const Config *cfg);
-bool is_clk_wire(const RTLIL::Wire *w, const Config *cfg);
-bool is_clk_wire(RTLIL::IdString port, const Config *cfg);
-bool is_rst_wire(RTLIL::IdString port, const Config *cfg);
-bool is_rst_wire(const RTLIL::Wire *w, const Config *cfg);
-bool is_tmr_error_out_wire(RTLIL::Wire *w, const Config *cfg);
+bool isProperSubmodule(RTLIL::Module *mod);
+bool isFlipFlop(const RTLIL::Cell *cell, const RTLIL::Module *module, const Config *cfg);
+bool isClkWire(const RTLIL::Wire *w, const Config *cfg);
+bool isClkWire(RTLIL::IdString port, const Config *cfg);
+bool isRstWire(RTLIL::IdString port, const Config *cfg);
+bool isRstWire(const RTLIL::Wire *w, const Config *cfg);
+bool isTmrErrorOutWire(RTLIL::Wire *w, const Config *cfg);
 
 std::pair<std::vector<RTLIL::IdString>, std::vector<RTLIL::IdString>>
-get_port_names(const RTLIL::Cell *cell, const RTLIL::Design *design);
-RTLIL::IdString createVoterCell(RTLIL::Design *design, size_t wire_width, const std::string &name_prefix);
+getPortNames(const RTLIL::Cell *cell, const RTLIL::Design *design);
+RTLIL::IdString createVoterCell(RTLIL::Design *design, size_t wire_width,
+                                const std::string &name_prefix);
 std::pair<RTLIL::Wire *, RTLIL::Wire *>
-insert_voter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, const Config *cfg);
+insertVoter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, const Config *cfg);
 
-void connect_error_signal(RTLIL::Module *mod, const std::vector<RTLIL::Wire *> &error_signals,
-                          const Config *cfg);
+void connectErrorSignal(RTLIL::Module *mod, const std::vector<RTLIL::Wire *> &error_signals,
+                        const Config *cfg);
 
-}
+} // namespace TMRX
 YOSYS_NAMESPACE_END
 
 #endif

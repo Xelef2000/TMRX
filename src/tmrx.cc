@@ -2,6 +2,10 @@
 
 YOSYS_NAMESPACE_BEGIN
 
-dict<RTLIL::IdString, pool<std::string>> ff_sources;
+namespace TMRX {
+
+dict<RTLIL::IdString, pool<std::string>> ffSources;
+
+} // namespace TMRX
 
 YOSYS_NAMESPACE_END
