@@ -20,7 +20,8 @@ getPortNames(const RTLIL::Cell *cell, const RTLIL::Design *design);
 RTLIL::IdString createVoterCell(RTLIL::Design *design, size_t wire_width,
                                 const std::string &name_prefix);
 std::pair<RTLIL::Wire *, RTLIL::Wire *>
-insertVoter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, const Config *cfg);
+insertVoter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, const Config *cfg,
+            const std::string &domainSuffix = "");
 
 void connectErrorSignal(RTLIL::Module *mod, const std::vector<RTLIL::Wire *> &error_signals,
                         const Config *cfg);

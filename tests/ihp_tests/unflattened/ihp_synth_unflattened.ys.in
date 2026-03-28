@@ -32,7 +32,7 @@ abc -liberty @PDK_ROOT@/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_ty
 opt_clean -purge
 
 clean
-write_verilog -noattr 08_final.v
+write_verilog 08_final.v
 write_json 08_final.json
 show -format svg -prefix final_netlist top
 show -format dot -prefix final_netlist top
@@ -69,7 +69,8 @@ design -stash gate
 design -reset
 
 design -copy-from gold -as gold_top top
-design -copy-from gate -as synth_top top
+design -copy-from gate *
+rename top synth_top
 
 
 async2sync gold_top
