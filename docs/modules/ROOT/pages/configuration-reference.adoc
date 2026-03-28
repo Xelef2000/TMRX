@@ -205,6 +205,25 @@ additional_ff_cells = ["MY_CUSTOM_FF"]
 excluded_ff_cells = ["sg13g2_dfrbp_1"]
 ----
 
+== Error Detection Options
+
+[cols="2,1,1,3",options="header"]
+|===
+| Option | Type | Default | Description
+
+| `error_port_name`
+| String
+| `""`
+| Name of the output port to use as the error sink (alternative to the `tmrx_error_sink` attribute)
+
+| `auto_error_port`
+| Bool
+| `false`
+| Automatically create a `tmrx_err_o` output port when no explicit error sink is present and voter errors exist
+|===
+
+See xref:error-detection.adoc[Error Detection] for full details on error sink methods and upward propagation.
+
 == Wire and Port Attributes
 
 [cols="1,3",options="header"]
@@ -219,6 +238,12 @@ excluded_ff_cells = ["sg13g2_dfrbp_1"]
 
 | `tmrx_error_sink`
 | Mark this output as the error aggregation point
+
+| `tmrx_error_port_name`
+| Module attribute: name of the port to use as the error sink (equivalent to `error_port_name` config option)
+
+| `tmrx_auto_error_port`
+| Module attribute: auto-create `tmrx_err_o` if no explicit error sink is present (equivalent to `auto_error_port` config option)
 |===
 
 == Reserved Groups

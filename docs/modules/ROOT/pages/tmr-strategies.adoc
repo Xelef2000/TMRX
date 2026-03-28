@@ -67,3 +67,74 @@ Full Module TMR creates a *wrapper module* containing three independent instance
 ====
 Black-box modules (modules with the `blackbox` attribute, memories, or processes) are automatically assigned Full Module TMR because their internals cannot be modified.
 ====
+
+== Child Module Version Selection
+
+When a design mixes TMR strategies, a parent module may instantiate a child that has been processed by TMRX.
+Which version of the child a parent sees depends on the child's `preserve_module_ports` setting.
+
+=== Child with preserve_module_ports = false
+
+When a child module is expanded with `preserve_module_ports = false`, TMRX keeps two versions of it in the design:
+
+* The *original module* with its unchanged interface.
+* A `_tmrx_impl` clone with triplicated ports and TMR'd internals.
+
+Which version a parent uses depends on the parent's TMR mode:
+
+[cols="1,2",options="header"]
+|===
+| Parent TMR mode | Child version used
+
+| `LogicTMR`
+| `_tmrx_impl` — the TMR'd clone with triplicated ports.
+TMRX automatically remaps cell references during Logic TMR expansion.
+
+| `FullModuleTMR`
+| Original — the non-expanded module with its original interface.
+Each of the three worker copies instantiates the original child.
+
+| `None`
+| Original — the non-expanded module with its original interface.
+The parent is not processed by TMRX, so no remapping occurs.
+|===
+
+This means a child module that is TMR'd with `preserve_module_ports = false` is *not* redundant inside a `FullModuleTMR` or `None` parent.
+The three FullModuleTMR workers each hold one copy of the original child, and a None parent holds one copy as well.
+
+=== Child with preserve_module_ports = true
+
+When a child module is expanded with `preserve_module_ports = true`, there is only one version of the module.
+TMRX expands it in-place: the interface is unchanged, but the internals are now triplicated.
+
+All parent modes — `LogicTMR`, `FullModuleTMR`, and `None` — instantiate this single module.
+Every parent therefore gets the TMR'd internals regardless of its own TMR mode.
+
+=== Summary
+
+[cols="1,1,1",options="header"]
+|===
+| Child `preserve_module_ports` | Parent mode | Child internals TMR'd?
+
+| `false`
+| `LogicTMR`
+| Yes — `_tmrx_impl` clone used
+
+| `false`
+| `FullModuleTMR`
+| No — original module used
+
+| `false`
+| `None`
+| No — original module used
+
+| `true`
+| Any
+| Yes — single in-place expanded module used
+|===
+
+[IMPORTANT]
+====
+If you want a TMR'd child module to be redundant inside a `FullModuleTMR` or `None` parent, set `preserve_module_ports = true` on the child.
+Without it, the child's TMR expansion is invisible to those parent modes.
+====
