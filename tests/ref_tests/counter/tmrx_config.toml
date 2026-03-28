@@ -35,7 +35,6 @@ expand_clock = false
 
 [module.top]
 groups = ["A", "B"]
-tmr_mode = "None"
 
 [module.top.logic]
 ff_cells = ["MY_FF_CELL"]

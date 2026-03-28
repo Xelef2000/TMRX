@@ -6,6 +6,7 @@
 #include "kernel/yosys_common.h"
 #include "tmrx.h"
 #include <cstddef>
+#include <cstdint>
 YOSYS_NAMESPACE_BEGIN
 
 namespace TMRX {
@@ -111,6 +112,76 @@ static std::string getSignalName(const RTLIL::SigSpec &sig) {
     return tmrx_signal_name_const;
 }
 
+static RTLIL::IdString getDomainAttributeName(const std::string &suffix) {
+    return RTLIL::IdString("\\tmr_domain" + suffix);
+}
+
+static void setCellDomainAttribute(RTLIL::Cell *cell, const std::string &suffix) {
+    if (!suffix.empty()) {
+        cell->set_bool_attribute(getDomainAttributeName(suffix), true);
+    }
+}
+
+static std::string sanitizeIdentifierComponent(const std::string &value) {
+    std::string result;
+    result.reserve(value.size());
+
+    bool lastWasUnderscore = false;
+    for (char ch : value) {
+        bool isAlphaNum = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+                          (ch >= '0' && ch <= '9');
+        char out = (isAlphaNum || ch == '_') ? ch : '_';
+
+        if (out == '_' && lastWasUnderscore) {
+            continue;
+        }
+
+        result.push_back(out);
+        lastWasUnderscore = (out == '_');
+    }
+
+    while (!result.empty() && result.back() == '_') {
+        result.pop_back();
+    }
+
+    if (result.empty()) {
+        return "anon";
+    }
+
+    return result;
+}
+
+static uint64_t hashStringFnv1a(const std::string &value) {
+    uint64_t hash = 1469598103934665603ull;
+    for (unsigned char ch : value) {
+        hash ^= ch;
+        hash *= 1099511628211ull;
+    }
+    return hash;
+}
+
+static std::string shortenIdentifierComponent(const std::string &value, size_t maxLength) {
+    if (value.size() <= maxLength) {
+        return value;
+    }
+
+    const std::string hashSuffix = stringf("_%016llx",
+                                           static_cast<unsigned long long>(hashStringFnv1a(value)));
+    if (maxLength <= hashSuffix.size()) {
+        return hashSuffix.substr(hashSuffix.size() - maxLength);
+    }
+
+    return value.substr(0, maxLength - hashSuffix.size()) + hashSuffix;
+}
+
+static std::string appendDomainTag(const std::string &name_prefix, const std::string &domainSuffix) {
+    if (domainSuffix.empty()) {
+        return name_prefix;
+    }
+
+    return name_prefix + tmrx_signal_name_separator + "tmr_domain" + domainSuffix;
+}
+
 RTLIL::IdString createVoterCell(RTLIL::Design *design, size_t wire_width,
                                 const std::string &name_prefix) {
     RTLIL::IdString voter_name = std::string(tmrx_voter_module_prefix) + name_prefix +
@@ -121,7 +192,6 @@ RTLIL::IdString createVoterCell(RTLIL::Design *design, size_t wire_width,
     }
 
     RTLIL::Module *voter = design->addModule(voter_name);
-
     voter->attributes[ID::keep_hierarchy] = RTLIL::State::S1;
 
     RTLIL::Wire *in_a = voter->addWire(tmrx_voter_port_a_id, wire_width);
@@ -174,7 +244,6 @@ static RTLIL::IdString createCustomVoterCell(RTLIL::Design *design,
     tmpl->cloneInto(clone);
     clone->name = unique_name;
     clone->attributes[ID::keep_hierarchy] = RTLIL::State::S1;
-
     return unique_name;
 }
 
@@ -255,7 +324,8 @@ static bool isSignalConstant(const RTLIL::SigSpec &sig) {
 }
 
 std::pair<RTLIL::Wire *, RTLIL::Wire *>
-insertVoter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, const Config *cfg) {
+insertVoter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, const Config *cfg,
+            const std::string &domainSuffix) {
     if (inputs.size() != tmrx_replication_factor) {
         log_error("Voters are only intended to be inserted with %zu inputs\n",
                   tmrx_replication_factor);
@@ -275,6 +345,9 @@ insertVoter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, co
     std::string name_prefix = modName + tmrx_signal_name_separator + sig_name_a +
                               tmrx_signal_name_separator + sig_name_b + tmrx_signal_name_separator +
                               sig_name_c;
+    std::string voter_name_prefix =
+        shortenIdentifierComponent(sanitizeIdentifierComponent(appendDomainTag(name_prefix, domainSuffix)),
+                                   72);
 
     if (cfg->tmrVoterSafeMode) {
         for (size_t i = 0; i < tmrx_replication_factor; i++) {
@@ -309,8 +382,8 @@ insertVoter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, co
     // following the \tmrx_voter_<prefix>_w1 convention.
     RTLIL::IdString voter_1bit =
         (cfg->tmrVoter == TmrVoter::Custom)
-            ? createCustomVoterCell(design, cfg->tmrVoterModule, name_prefix)
-            : createVoterCell(design, 1, name_prefix);
+            ? createCustomVoterCell(design, cfg->tmrVoterModule, voter_name_prefix)
+            : createVoterCell(design, 1, voter_name_prefix);
 
     RTLIL::SigSpec output_bits;
     RTLIL::SigSpec error_bits;
@@ -402,6 +475,7 @@ insertVoter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, co
         RTLIL::Wire *bit_err = module->addWire(NEW_ID, 1);
 
         RTLIL::Cell *voter_inst = module->addCell(NEW_ID, voter_1bit);
+        setCellDomainAttribute(voter_inst, domainSuffix);
         voter_inst->setPort(tmrx_voter_port_a_id, inputs.at(0).extract(bit, 1));
         voter_inst->setPort(tmrx_voter_port_b_id, inputs.at(1).extract(bit, 1));
         voter_inst->setPort(tmrx_voter_port_c_id, inputs.at(2).extract(bit, 1));
@@ -415,6 +489,12 @@ insertVoter(RTLIL::Module *module, const std::vector<RTLIL::SigSpec> &inputs, co
 
         output_bits.append(bit_out);
         error_bits.append(bit_err);
+    }
+
+    if (!domainSuffix.empty() && voter_mod_ptr != nullptr) {
+        for (auto voter_cell : voter_mod_ptr->cells()) {
+            setCellDomainAttribute(voter_cell, domainSuffix);
+        }
     }
 
     // Reassemble N-bit output from individual bit results.

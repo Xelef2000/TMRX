@@ -22,6 +22,19 @@ bool isInClkNet(const RTLIL::Wire *w) { return clkNetWires.count(RTLIL::SigSpec(
 
 bool isInRstNet(const RTLIL::Wire *w) { return rstNetWires.count(RTLIL::SigSpec(w)) != 0; }
 
+RTLIL::IdString getDomainAttributeName(const std::string &suffix) {
+    return RTLIL::IdString("\\tmr_domain" + suffix);
+}
+
+bool isLogicTreeCell(RTLIL::Cell *cell, RTLIL::Design *design) {
+    RTLIL::Module *cellMod = design->module(cell->type);
+    return cellMod == nullptr || !isProperSubmodule(cellMod) || cellMod->get_blackbox_attribute();
+}
+
+void setCellDomainAttribute(RTLIL::Cell *cell, const std::string &suffix) {
+    cell->set_bool_attribute(getDomainAttributeName(suffix), true);
+}
+
 bool shouldKeepWireShared(const RTLIL::Wire *wire, const Config *cfg) {
     return isTmrErrorOutWire(const_cast<RTLIL::Wire *>(wire), cfg) ||
            (cfg->preserveModulePorts && wire->port_input) ||
@@ -318,7 +331,7 @@ std::vector<RTLIL::Wire *> insertVoterAfterFf(RTLIL::Module *mod,
             std::vector<RTLIL::SigSpec> intermediateWires;
             std::vector<RTLIL::SigSpec> originalSignals;
 
-            for (auto ff : {flipFlops.first, flipFlops.second.first, flipFlops.second.second}) {
+        for (auto ff : {flipFlops.first, flipFlops.second.first, flipFlops.second.second}) {
                 RTLIL::SigSpec out_signal = ff->getPort(port);
                 RTLIL::Wire *intermediate_wire = mod->addWire(NEW_ID, out_signal.size());
 
@@ -329,7 +342,10 @@ std::vector<RTLIL::Wire *> insertVoterAfterFf(RTLIL::Module *mod,
 
             for (size_t i = 0; i < tmrx_replication_factor; i++) {
                 std::pair<RTLIL::Wire *, RTLIL::Wire *> resultWires =
-                    insertVoter(mod, intermediateWires, cfg);
+                    insertVoter(mod, intermediateWires, cfg,
+                                i == 0 ? cfg->logicPath1Suffix
+                                       : (i == 1 ? cfg->logicPath2Suffix
+                                                 : cfg->logicPath3Suffix));
                 mod->connect(originalSignals.at(i), resultWires.first);
 
                 errorSignals.push_back(resultWires.second);
@@ -391,11 +407,11 @@ void renameWiresAndCells(RTLIL::Module *mod, std::vector<RTLIL::Wire *> wires,
     }
 
     for (auto c : cells) {
-        RTLIL::Module *cellMod = c->module->design->module(c->type);
-        if (isProperSubmodule(cellMod) && !cellMod->get_blackbox_attribute()) {
+        if (!isLogicTreeCell(c, c->module->design)) {
             continue;
         }
 
+        setCellDomainAttribute(c, suffix);
         mod->rename(c, mod->uniquify(c->name.str() + suffix));
     }
 }
@@ -430,12 +446,12 @@ insertDuplicateLogic(RTLIL::Module *mod, std::vector<RTLIL::Wire *> wires,
     }
 
     for (auto c : cells) {
-        RTLIL::Module *cellMod = c->module->design->module(c->type);
-        if (isProperSubmodule(cellMod) && !cellMod->get_blackbox_attribute()) {
+        if (!isLogicTreeCell(c, c->module->design)) {
             continue;
         }
 
         RTLIL::Cell *c_b = mod->addCell(mod->uniquify(c->name.str() + suffix), c->type);
+        setCellDomainAttribute(c_b, suffix);
 
         // log("Looking at cell %u\n",
         // (isFlipFlop(c, worker, &known_ff_cell_names)));

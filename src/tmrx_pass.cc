@@ -108,7 +108,7 @@ struct TmrxPass : public Pass {
                 // template) from the design at the end, so `target` is a
                 // dangling pointer after the call. The wrapper module created
                 // inside already calls fixup_ports() before that point.
-                TMRX::fullModuleTmrExpansion(target, cfg);
+                TMRX::fullModuleTmrExpansion(target, &cfgMgr, cfg);
             }
         }
 

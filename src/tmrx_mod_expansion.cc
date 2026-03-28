@@ -6,18 +6,42 @@ YOSYS_NAMESPACE_BEGIN
 namespace TMRX {
 namespace {
 
+RTLIL::IdString getDomainAttributeName(const std::string &suffix) {
+    return RTLIL::IdString("\\tmr_domain" + suffix);
+}
+
+void setCellDomainAttribute(RTLIL::Cell *cell, const std::string &suffix) {
+    cell->set_bool_attribute(getDomainAttributeName(suffix), true);
+}
+
+bool isRecursiveDomainAttrExempt(RTLIL::Module *mod, const ConfigManager *cfgMgr) {
+    if (mod == nullptr) {
+        return false;
+    }
+
+    const Config *cfg = cfgMgr->getConfig(mod);
+    return cfg->tmrMode == TmrMode::LogicTMR && cfg->preserveModulePorts;
+}
+
 // Recursively clone and rename all proper submodule cells within `mod`,
 // appending `suffix` to their type names.  Creates new uniquified module
 // definitions in `design` as needed (skips creation if already present).
 void uniquifySubmodulesRecursive(RTLIL::Module *mod, const std::string &suffix,
-                                 RTLIL::Design *design) {
+                                 RTLIL::Design *design, const ConfigManager *cfgMgr) {
     std::vector<RTLIL::Cell *> cells(mod->cells().begin(), mod->cells().end());
 
     for (auto cell : cells) {
         RTLIL::Module *cellMod = design->module(cell->type);
         if (cellMod == nullptr || !isProperSubmodule(cellMod)) {
+            setCellDomainAttribute(cell, suffix);
             continue;
         }
+
+        if (isRecursiveDomainAttrExempt(cellMod, cfgMgr)) {
+            continue;
+        }
+
+        setCellDomainAttribute(cell, suffix);
         // Blackbox modules (standard cells, user IP blackboxes) are
         // independent per-instance by definition — multiple workers can share
         // the same blackbox type without needing uniquified copies.
@@ -41,7 +65,7 @@ void uniquifySubmodulesRecursive(RTLIL::Module *mod, const std::string &suffix,
             uniqueMod->attributes.erase(ATTRIBUTE_IMPL_MODULE);
 
             // Recurse so deeper submodule levels are also uniquified.
-            uniquifySubmodulesRecursive(uniqueMod, suffix, design);
+            uniquifySubmodulesRecursive(uniqueMod, suffix, design, cfgMgr);
         }
 
         cell->type = uniqueName;
@@ -50,7 +74,7 @@ void uniquifySubmodulesRecursive(RTLIL::Module *mod, const std::string &suffix,
 
 } // namespace
 
-void fullModuleTmrExpansion(RTLIL::Module *mod, const Config *cfg) {
+void fullModuleTmrExpansion(RTLIL::Module *mod, const ConfigManager *cfgMgr, const Config *cfg) {
     std::vector<RTLIL::Wire *> errorWires;
 
     RTLIL::IdString originalModuleName = mod->name;
@@ -131,7 +155,8 @@ void fullModuleTmrExpansion(RTLIL::Module *mod, const Config *cfg) {
 
             for (size_t i = 0; i < tmrx_replication_factor; i++) {
                 auto [voterOutput, err] =
-                    insertVoter(wrapper, {wm.second.at(0), wm.second.at(1), wm.second.at(2)}, cfg);
+                    insertVoter(wrapper, {wm.second.at(0), wm.second.at(1), wm.second.at(2)}, cfg,
+                                suffixes.at(i));
                 errorWires.push_back(err);
                 voterOutputs.push_back(voterOutput);
             }
@@ -157,7 +182,7 @@ void fullModuleTmrExpansion(RTLIL::Module *mod, const Config *cfg) {
                     insertVoter(wrapper,
                                 {cellPorts.at(0).at(wm.first), cellPorts.at(1).at(wm.first),
                                  cellPorts.at(2).at(wm.first)},
-                                cfg);
+                                cfg, suffixes.at(i));
                 errorWires.push_back(err);
                 voterOutputs.push_back(voterOutput);
             }
@@ -222,7 +247,7 @@ void fullModuleTmrExpansion(RTLIL::Module *mod, const Config *cfg) {
         worker->name = workerName;
         worker->set_bool_attribute(ATTRIBUTE_IS_PROPER_SUBMODULE, true);
 
-        uniquifySubmodulesRecursive(worker, pathSuffixes[i], design);
+        uniquifySubmodulesRecursive(worker, pathSuffixes[i], design, cfgMgr);
 
         duplicates[i]->type = workerName;
     }
