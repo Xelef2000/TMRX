@@ -28,6 +28,7 @@ constexpr const char cfg_tmr_voter_clock_net_key_name[] = "tmr_voter_clock_net";
 constexpr const char cfg_tmr_voter_reset_net_key_name[] = "tmr_voter_reset_net";
 constexpr const char cfg_tmr_voter_safe_mode_key_name[] = "tmr_voter_safe_mode";
 constexpr const char cfg_preserve_module_ports_key_name[] = "preserve_module_ports";
+constexpr const char cfg_prevent_renaming_key_name[] = "prevent_renaming";
 constexpr const char cfg_clock_port_names_key_name[] = "clock_port_names";
 constexpr const char cfg_expand_clock_key_name[] = "expand_clock";
 constexpr const char cfg_reset_port_names_key_name[] = "reset_port_names";
@@ -66,6 +67,7 @@ constexpr const char cfg_tmr_mode_full_module_insert_voter_on_clock_nets_attr_na
 constexpr const char cfg_tmr_mode_full_module_insert_voter_on_reset_nets_attr_name[] =
     "\\tmrx_tmr_mode_full_module_insert_voter_on_reset_nets";
 constexpr const char cfg_tmr_preserve_module_ports_attr_name[] = "\\tmrx_tmr_preserve_module_ports";
+constexpr const char cfg_prevent_renaming_attr_name[] = "\\tmrx_prevent_renaming";
 constexpr const char cfg_insert_voter_before_ff_attr_name[] = "\\tmrx_insert_voter_before_ff";
 constexpr const char cfg_insert_voter_after_ff_attr_name[] = "\\tmrx_insert_voter_after_ff";
 constexpr const char cfg_clock_port_name_attr_name[] = "\\tmrx_clock_port_name";

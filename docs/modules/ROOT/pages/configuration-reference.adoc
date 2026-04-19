@@ -123,6 +123,11 @@ Configure in a `[<scope>.full_module]` block such as `[global.full_module]` or `
 | Bool
 | `false`
 | Keep original module interface unchanged
+
+| `prevent_renaming`
+| Bool
+| `false`
+| Prevent FullModuleTMR worker-branch uniquification of this module
 |===
 
 When `preserve_module_ports = true`:::
@@ -135,6 +140,12 @@ When `preserve_module_ports = false`:::
 * Input and output ports are triplicated (with suffixes like `_a`, `_b`, `_c`).
 * Clock and reset ports may be shared or triplicated based on `expand_clock`/`expand_reset`.
 * Parent modules must connect to all three port variants.
+
+When `prevent_renaming = true`:::
+* A `FullModuleTMR` parent does not create branch-local renamed copies of this module.
+* The same module type is shared across the `_a`/`_b`/`_c` worker branches.
+* This only affects recursive branch uniquification.
+* It does not disable the internal `_tmrx_impl` clone or the internal wrapper/worker rename steps used by TMRX itself.
 
 == Clock and Reset Handling
 

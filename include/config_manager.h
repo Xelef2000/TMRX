@@ -56,6 +56,7 @@ struct Config {
     bool tmrVoterSafeMode;
 
     bool preserveModulePorts;
+    bool preventRenaming;
 
     bool insertVoterBeforeFf;
     bool insertVoterAfterFf;
@@ -104,6 +105,7 @@ struct ConfigPart {
     std::optional<bool> tmrVoterSafeMode;
 
     std::optional<bool> preserveModulePorts;
+    std::optional<bool> preventRenaming;
 
     std::optional<bool> insertVoterBeforeFf;
     std::optional<bool> insertVoterAfterFf;

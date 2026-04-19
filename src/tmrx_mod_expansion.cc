@@ -20,7 +20,7 @@ bool isRecursiveDomainAttrExempt(RTLIL::Module *mod, const ConfigManager *cfgMgr
     }
 
     const Config *cfg = cfgMgr->getConfig(mod);
-    return cfg->tmrMode == TmrMode::LogicTMR && cfg->preserveModulePorts;
+    return cfg->preventRenaming || (cfg->tmrMode == TmrMode::LogicTMR && cfg->preserveModulePorts);
 }
 
 // Recursively clone and rename all proper submodule cells within `mod`,
