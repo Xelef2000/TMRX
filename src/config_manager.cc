@@ -36,6 +36,7 @@ const std::set<std::string> &scopedConfigRootKeys() {
         cfg_tmr_voter_reset_net_key_name,
         cfg_tmr_voter_safe_mode_key_name,
         cfg_preserve_module_ports_key_name,
+        cfg_prevent_renaming_key_name,
         cfg_clock_port_names_key_name,
         cfg_expand_clock_key_name,
         cfg_reset_port_names_key_name,
@@ -60,6 +61,7 @@ const std::set<std::string> &scopedConfigRootKeysWithGroups() {
         cfg_tmr_voter_reset_net_key_name,
         cfg_tmr_voter_safe_mode_key_name,
         cfg_preserve_module_ports_key_name,
+        cfg_prevent_renaming_key_name,
         cfg_clock_port_names_key_name,
         cfg_expand_clock_key_name,
         cfg_reset_port_names_key_name,
@@ -153,6 +155,7 @@ ConfigPart parseCommonConfigPart(const toml::value &t) {
 
     cfg.tmrVoterSafeMode = tomlFindOptional<bool>(t, cfg_tmr_voter_safe_mode_key_name);
     cfg.preserveModulePorts = tomlFindOptional<bool>(t, cfg_preserve_module_ports_key_name);
+    cfg.preventRenaming = tomlFindOptional<bool>(t, cfg_prevent_renaming_key_name);
     cfg.expandClock = tomlFindOptional<bool>(t, cfg_expand_clock_key_name);
     cfg.expandReset = tomlFindOptional<bool>(t, cfg_expand_reset_key_name);
     cfg.autoErrorPort = tomlFindOptional<bool>(t, cfg_auto_error_port_key_name);
@@ -222,6 +225,7 @@ void mergeConfigPart(ConfigPart &dest, const ConfigPart &src) {
     mergeOptionalField(dest.tmrVoterResetNet, src.tmrVoterResetNet);
     mergeOptionalField(dest.tmrVoterSafeMode, src.tmrVoterSafeMode);
     mergeOptionalField(dest.preserveModulePorts, src.preserveModulePorts);
+    mergeOptionalField(dest.preventRenaming, src.preventRenaming);
     mergeOptionalField(dest.insertVoterBeforeFf, src.insertVoterBeforeFf);
     mergeOptionalField(dest.insertVoterAfterFf, src.insertVoterAfterFf);
     mergeOptionalField(dest.tmrModeFullModuleInsertVoterBeforeModules,
@@ -402,6 +406,7 @@ void ConfigManager::loadGlobalDefaultCfg() {
     globalCfg.tmrVoterSafeMode = true;
 
     globalCfg.preserveModulePorts = false;
+    globalCfg.preventRenaming = false;
 
     globalCfg.insertVoterBeforeFf = false;
     globalCfg.insertVoterAfterFf = true;
@@ -540,6 +545,7 @@ ConfigPart ConfigManager::parseModuleAnnotations(const Yosys::RTLIL::Module *mod
     // Parse boolean fields
     cfg.tmrVoterSafeMode = getBoolAttrValue(mod, cfg_tmr_voter_safe_mode_attr_name);
     cfg.preserveModulePorts = getBoolAttrValue(mod, cfg_tmr_preserve_module_ports_attr_name);
+    cfg.preventRenaming = getBoolAttrValue(mod, cfg_prevent_renaming_attr_name);
     cfg.insertVoterBeforeFf = getBoolAttrValue(mod, cfg_insert_voter_before_ff_attr_name);
     cfg.insertVoterAfterFf = getBoolAttrValue(mod, cfg_insert_voter_after_ff_attr_name);
     cfg.tmrModeFullModuleInsertVoterBeforeModules =
@@ -586,6 +592,7 @@ Config ConfigManager::assembleConfig(std::vector<ConfigPart> parts, Config def) 
         applyIfPresent(cfg.tmrVoterResetNet, part.tmrVoterResetNet);
         applyIfPresent(cfg.tmrVoterSafeMode, part.tmrVoterSafeMode);
         applyIfPresent(cfg.preserveModulePorts, part.preserveModulePorts);
+        applyIfPresent(cfg.preventRenaming, part.preventRenaming);
         applyIfPresent(cfg.insertVoterBeforeFf, part.insertVoterBeforeFf);
         applyIfPresent(cfg.insertVoterAfterFf, part.insertVoterAfterFf);
         applyIfPresent(cfg.tmrModeFullModuleInsertVoterBeforeModules,
@@ -765,6 +772,16 @@ void ConfigManager::validateCfg(Yosys::RTLIL::Design *design) {
                     "This may cause voters to be inserted on the reset net.\n",
                     mod);
             }
+        }
+
+        // Check 4: preserve_module_ports with auto_error_port can still add a new shared
+        // error output to the preserved interface.
+        if (c.preserveModulePorts && c.autoErrorPort) {
+            Yosys::log_warning(
+                "Module '%s' has preserve_module_ports enabled together with auto_error_port. "
+                "If voter errors exist, TMRX will still auto-create a shared error output "
+                "port.\n",
+                mod);
         }
 
         // Check 5: insert_voter_before_ff is not implemented — catch early.
@@ -1043,6 +1060,7 @@ std::string ConfigManager::getConfigAsString(Yosys::RTLIL::Module *mod) const {
     }
     ret += "TMR-Voter Safe Mode: " + boolToString(c->tmrVoterSafeMode) + "\n";
     ret += "Preserve Mod Ports: " + boolToString(c->preserveModulePorts) + "\n";
+    ret += "Prevent Renaming: " + boolToString(c->preventRenaming) + "\n";
     ret += "Logic.insertVoterBeforeFf: " + boolToString(c->insertVoterBeforeFf) + "\n";
     ret += "Logic.insertVoterAfterFf: " + boolToString(c->insertVoterAfterFf) + "\n";
     ret += "Full Module.insert_voter_before_modules: " +

@@ -1,0 +1,9 @@
+read_verilog top.v
+hierarchy -check -top top
+proc
+opt
+
+tmrx_mark
+tmrx -c CONFIG_FILE
+
+write_rtlil OUTPUT_FILE

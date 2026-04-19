@@ -12,10 +12,8 @@ Full documentation is available at **https://xelef2000.github.io/TMRX/**
 
 ## Quick Install
 
-```bash
-docker pull ghcr.io/xelef2000/vlsi-toolbox:latest-amd64
-docker run -it -v $(pwd):/workspace ghcr.io/xelef2000/vlsi-toolbox:latest-amd64
-```
+For x86 devices, download the prebuilt TMRX plugin from the
+[Releases](https://github.com/Xelef2000/TMRX/releases) section.
 
 Or build from source:
 

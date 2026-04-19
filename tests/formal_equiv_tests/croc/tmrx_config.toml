@@ -26,6 +26,7 @@ insert_voter_after_modules = true
 # is covered by the croc_soc equivalence check regardless.
 [module.tc_sram_impl]
 tmr_mode = "None"
+prevent_renaming = true
 
 # ---------------------------------------------------------------------------
 # Clock Domain Crossing (CDC) modules

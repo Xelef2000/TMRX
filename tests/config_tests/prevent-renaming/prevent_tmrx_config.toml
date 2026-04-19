@@ -1,0 +1,14 @@
+[global]
+tmr_mode = "None"
+preserve_module_ports = true
+clock_port_names = ["clk_i"]
+reset_port_names = ["rst_ni"]
+
+[module.top]
+tmr_mode = "FullModuleTMR"
+preserve_module_ports = true
+
+[module.child]
+tmr_mode = "None"
+preserve_module_ports = true
+prevent_renaming = true
