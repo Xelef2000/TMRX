@@ -28,12 +28,24 @@
 | String
 | `"Default"`
 | Voter implementation to use
+
+| `tmr_voter_safe_mode`
+| Bool
+| `true`
+| Validate voter inputs before insertion. Unconnected inputs are treated as errors and constant inputs generate warnings.
 |===
 
 The `"Default"` voter implements a simple majority function using AND/OR gates:
 
 * *Output*: `y = (a & b) | (a & c) | (b & c)` (majority function)
 * *Error*: `err = (a ^ b) | (b ^ c)` (any mismatch detected)
+
+[TIP]
+====
+Keep `tmr_voter_safe_mode = true` unless you have a very specific reason to disable it.
+====
+
+The equivalent Verilog attribute is `tmrx_tmr_voter_safe_mode`.
 
 == Logic TMR Options
 

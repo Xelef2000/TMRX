@@ -32,6 +32,7 @@ The `[global]` section sets default values for all modules:
 [global]
 tmr_mode = "LogicTMR"
 tmr_voter = "Default"
+tmr_voter_safe_mode = true
 preserve_module_ports = false
 clock_port_names = ["clk_i", "clk"]
 reset_port_names = ["rst_ni", "rst_n"]
@@ -160,6 +161,10 @@ endmodule
 | `tmrx_tmr_voter`
 | `"Default"`
 | Voter type
+
+| `tmrx_tmr_voter_safe_mode`
+| `"0"`, `"1"`
+| Enable voter input validation before insertion
 
 | `tmrx_preserve_module_ports`
 | `"0"`, `"1"`

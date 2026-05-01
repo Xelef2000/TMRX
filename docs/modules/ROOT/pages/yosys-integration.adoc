@@ -17,24 +17,35 @@ Understanding what each pass does internally explains why their placement matter
 
 TMRX must insert voters after flip-flop outputs.
 The challenge is that technology mapping (`dfflibmap`, `abc`) replaces Yosys built-in FF cells (such as `$dff`, `$dffe`, `$sdff`) with library-specific cells (such as `sg13g2_dfrbp_1`).
-After mapping, there are no longer any built-in FF types in the netlist — only opaque library cells.
+After mapping, there are no longer any built-in FF types in the netlist - only opaque library cells.
 
 `tmrx_mark` solves this by running *before* technology mapping, while the built-in FF types are still present.
 For every module it scans, it records the `src` (source location) attribute of each built-in FF cell into a global lookup table.
-This attribute is preserved by `dfflibmap` and `abc` when they replace the cell type.
+This pass does not infer flip-flops from behavior or timing - it only trusts built-in Yosys FF cell types and their preserved source locations.
+When Yosys later replaces the cell type, TMRX uses the recorded `src` attribute to recover which library cell came from a flip-flop.
 
-When the `tmrx` pass later calls `isFlipFlop()` on a library cell, it checks:
+When the `tmrx` pass later calls `isFlipFlop()` on a cell, it checks:
 
 . Is the cell type a built-in Yosys FF? (catches any FFs not yet mapped)
 . Does the cell's `src` attribute appear in the `ffSources` table recorded by `tmrx_mark`? (catches mapped library cells that originated from FFs)
 . Is the cell type listed in `ff_cells` or `additional_ff_cells` from the configuration?
 
-This three-step check allows reliable FF identification after technology mapping.
+This three-step check works well only when the source attribute survives the full Yosys flow.
+If a later pass rewrites or drops `src`, `tmrx` can no longer prove that the mapped cell is a flip-flop.
 
 === Submodule Marking
 
 For each cell in a module whose type resolves to another module in the design, `tmrx_mark` sets the `tmrx_is_proper_submodule` attribute on that module.
 This attribute is the mechanism by which `tmrx` distinguishes between instantiated design modules (which need hierarchical port handling) and primitive or black-box cells (which do not).
+
+[WARNING]
+====
+`tmrx_mark` is unreliable on larger or heavily optimized designs.
+A Yosys pass can remove or alter the `src` attribute, and once that happens TMRX no longer knows that the mapped cell was originally a flip-flop.
+
+Outside of small designs, do not rely on automatic FF discovery alone.
+Explicitly list all flip-flop cell types in the TMRX configuration using `ff_cells` and, if needed, `additional_ff_cells`.
+====
 
 === Placement
 
@@ -52,6 +63,7 @@ abc -liberty cells.lib
 ====
 Running `tmrx_mark` before `dfflibmap`/`abc` is mandatory.
 If it runs after, the built-in FF types are already gone and the source table will be empty, causing TMRX to miss every flip-flop.
+Even when it runs in the correct place, the recorded `src` information is only as good as the rest of the Yosys flow preserves it.
 ====
 
 == The tmrx Pass
@@ -88,7 +100,7 @@ Instead, it:
 The original module is only kept if a `None`-mode parent still references it directly.
 Otherwise it is removed from the design after all processing is complete.
 
-This mechanism allows a module to be used in two ways simultaneously: with its original interface (by any non-TMR parent) and with its expanded interface (by any TMR parent that was also processed by `tmrx`.
+This mechanism allows a module to be used in two ways simultaneously: with its original interface (by any non-TMR parent) and with its expanded interface (by any TMR parent that was also processed by `tmrx`).
 
 === Dispatch to TMR Strategy
 
