@@ -26,6 +26,7 @@ Both strategies can be mixed within the same design hierarchy.
 == Getting Started
 
 * xref:installation.adoc[Install TMRX] using Docker or build from source.
-* Follow the xref:quick-start.adoc[Quick Start] guide to apply TMR to your first design.
-* Learn about xref:tmr-strategies.adoc[TMR Strategies] and how to choose between them.
-* Configure TMRX using the xref:configuration.adoc[Configuration] guide.
+* Follow the xref:quick-start.adoc[Quick Start] guide for the shortest path to a working run.
+* Read xref:tmr-strategies.adoc[TMR Strategies] to choose between Logic TMR and Full Module TMR.
+* Use xref:yosys-integration.adoc[Yosys Integration] for the exact Yosys pass order and `tmrx_mark` behavior.
+* Configure TMRX with the xref:configuration.adoc[Configuration] guide and the xref:configuration-reference.adoc[Configuration Reference].
