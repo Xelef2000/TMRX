@@ -149,55 +149,8 @@ module critical_module (
 endmodule
 ----
 
-.Supported Module Attributes
-[cols="2,2,3",options="header"]
-|===
-| Attribute | Values | Description
-
-| `tmrx_tmr_mode`
-| `"None"`, `"LogicTMR"`, `"FullModuleTMR"`
-| TMR strategy
-
-| `tmrx_tmr_voter`
-| `"Default"`
-| Voter type
-
-| `tmrx_tmr_voter_safe_mode`
-| `"0"`, `"1"`
-| Enable voter input validation before insertion
-
-| `tmrx_preserve_module_ports`
-| `"0"`, `"1"`
-| Keep original interface
-
-| `tmrx_insert_voter_before_ff`
-| `"0"`, `"1"`
-| Voters before FFs (planned)
-
-| `tmrx_insert_voter_after_ff`
-| `"0"`, `"1"`
-| Voters after FFs
-
-| `tmrx_expand_clock`
-| `"0"`, `"1"`
-| Triplicate clock
-
-| `tmrx_expand_rst`
-| `"0"`, `"1"`
-| Triplicate reset
-
-| `tmrx_assign_to_group`
-| `"group_name"` or `"group1;group2"`
-| Assign to group(s)
-
-| `tmrx_clock_port_name`
-| `"clk"` or `"clk1;clk2"`
-| Clock port names
-
-| `tmrx_rst_port_name`
-| `"rst"` or `"rst1;rst2"`
-| Reset port names
-|===
+Use `tmrx_*` attributes when you want to keep configuration close to the RTL.
+The full list of supported attributes and their meanings is in the xref:configuration-reference.adoc[Configuration Reference].
 
 [NOTE]
 ====

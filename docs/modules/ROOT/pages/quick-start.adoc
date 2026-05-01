@@ -1,7 +1,8 @@
 = Quick Start
 :description: Get up and running with TMRX in three steps.
 
-This guide walks you through applying TMR to a design using TMRX.
+This guide walks you through the shortest path to a working TMRX run.
+For the reasons behind the pass order, see xref:yosys-integration.adoc[Yosys Integration].
 
 == Procedure
 
@@ -20,32 +21,25 @@ reset_port_names = ["rst_ni", "rst_n"]
 +
 [source]
 ----
-# Read design
 read_verilog my_design.v
 hierarchy -check -top top
 
-# Standard synthesis
 proc; opt
 techmap
 
-# Mark cells for TMR (run after optimization, before technology mapping)
 tmrx_mark
 
-# Technology mapping
 read_liberty -lib cells.lib
 dfflibmap -liberty cells.lib
 abc -liberty cells.lib
 
-# Apply TMR
 tmrx -c tmrx_config.toml
 
-# Final optimization
 opt -noff
 techmap
 dfflibmap -liberty cells.lib
 abc -liberty cells.lib
 
-# Output
 write_verilog -noattr output.v
 ----
 
@@ -59,5 +53,5 @@ yosys -m build/tmrx.so -s synth.ys
 == Next Steps
 
 * Learn about xref:tmr-strategies.adoc[TMR Strategies] and when to use each one.
-* Explore the full xref:configuration.adoc[Configuration] options.
+* Explore the xref:configuration.adoc[Configuration] guide and the xref:configuration-reference.adoc[Configuration Reference].
 * See complete xref:examples.adoc[Examples] including hierarchical designs.
