@@ -10,6 +10,7 @@ pdk_abs_path = meson.project_source_root() / pdk_dir_name
 
 slang_dir_name = 'yosys-slang'
 slang_abs_path = meson.project_source_root() / slang_dir_name
+slang_revision = '23193003ee2c2297ec8b6cbc8f6f9cdb0e732a47'
 
 if not fs.is_dir(slang_abs_path)
   message('Cloning yosys-slang...')
@@ -21,6 +22,33 @@ if not fs.is_dir(slang_abs_path)
     check: true,
   )
 endif
+
+if run_command(
+  git,
+  '-C', slang_abs_path,
+  'cat-file', '-e', slang_revision + '^{commit}',
+  check: false,
+).returncode() != 0
+  run_command(
+    git,
+    '-C', slang_abs_path,
+    'fetch', '--depth', '1', 'origin', slang_revision,
+    check: true,
+  )
+endif
+
+run_command(
+  git,
+  '-C', slang_abs_path,
+  'checkout', '--detach', slang_revision,
+  check: true,
+)
+run_command(
+  git,
+  '-C', slang_abs_path,
+  'submodule', 'update', '--init', '--recursive',
+  check: true,
+)
 
 make = find_program('make', required: true)
 slang_build = custom_target(
