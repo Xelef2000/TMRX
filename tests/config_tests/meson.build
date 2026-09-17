@@ -1,4 +1,5 @@
 subdir('global-1')
 subdir('auto-error-port')
+subdir('auto-error-propagation')
 subdir('child-error-port-name')
 subdir('prevent-renaming')

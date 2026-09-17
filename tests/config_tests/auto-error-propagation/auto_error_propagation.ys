@@ -1,0 +1,14 @@
+# The parent has no local voter errors. Its automatic error output can only be
+# created by recognizing and collecting the child's automatic error output.
+
+read_verilog top.v
+hierarchy -check -top top
+proc; opt
+
+tmrx_mark
+tmrx -c tmrx_config.toml
+
+select -assert-count 1 child/o:tmrx_err_o
+select -assert-count 1 top/o:tmrx_err_o
+
+write_verilog -noattr auto_error_propagation_out.v
