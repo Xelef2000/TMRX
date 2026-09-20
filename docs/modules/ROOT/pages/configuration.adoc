@@ -101,6 +101,10 @@ expand_reset = true
 [module.alu.logic]
 insert_voter_after_ff = true
 
+[module.state_machine]
+# Lower-overhead state protection; combinational SETs remain unprotected.
+tmr_mode = "RegisterTMR"
+
 [module.register_file]
 tmr_mode = "FullModuleTMR"
 preserve_module_ports = true

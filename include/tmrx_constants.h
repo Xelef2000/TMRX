@@ -83,6 +83,7 @@ constexpr const char cfg_auto_error_port_attr_name[] = "\\tmrx_auto_error_port";
 constexpr const char cfg_tmr_mode_none_name[] = "None";
 constexpr const char cfg_tmr_mode_full_module_tmr_name[] = "FullModuleTMR";
 constexpr const char cfg_tmr_mode_logic_tmr_name[] = "LogicTMR";
+constexpr const char cfg_tmr_mode_register_tmr_name[] = "RegisterTMR";
 constexpr const char cfg_tmr_voter_default_name[] = "Default";
 constexpr const char cfg_tmr_voter_custom_name[] = "Custom";
 constexpr const char cfg_unknown_name[] = "Unknown";

@@ -2,7 +2,7 @@
 
 [options]
 mode bmc
-depth 20
+depth 1000
 
 [engines]
 smtbmc
@@ -16,7 +16,7 @@ plugin -i @TMRX_SO@
 # -------------------------------------------------------------------------
 read_slang --top counter_8bit counter_8bit.v \
         --compat-mode --keep-hierarchy \
-        --allow-use-before-declare --ignore-unknown-modules
+        --allow-use-before-declare
 hierarchy -check -top counter_8bit
 proc; opt; flatten
 opt_clean -purge
@@ -30,7 +30,7 @@ design -save gold
 design -reset
 read_slang --top counter_8bit counter_8bit.v \
         --compat-mode --keep-hierarchy \
-        --allow-use-before-declare --ignore-unknown-modules
+        --allow-use-before-declare
 hierarchy -check -top counter_8bit
 proc; opt
 tmrx_mark

@@ -572,6 +572,65 @@ void logicTmrExpansion(RTLIL::Module *mod, const ConfigManager *cfgMgr, const Co
     connectErrorSignal(mod, errorWires, cfg);
 }
 
+void registerTmrExpansion(RTLIL::Module *mod, const ConfigManager *cfgMgr,
+                          const Config *cfgOverride) {
+    const Config *cfg = cfgOverride ? cfgOverride : cfgMgr->getConfig(mod);
+    std::vector<RTLIL::Cell *> originalCells(mod->cells().begin(), mod->cells().end());
+    std::vector<RTLIL::Wire *> errorWires;
+    size_t ffCount = 0;
+
+    log("  Register TMR: triplicating flip-flops in '%s' (%zu cell(s))\n", mod->name.c_str(),
+        originalCells.size());
+
+    for (RTLIL::Cell *ffA : originalCells) {
+        if (!isFlipFlop(ffA, mod, cfg)) {
+            continue;
+        }
+
+        ffCount++;
+        RTLIL::Cell *ffB = mod->addCell(mod->uniquify(ffA->name.str() + cfg->logicPath2Suffix),
+                                         ffA->type);
+        RTLIL::Cell *ffC = mod->addCell(mod->uniquify(ffA->name.str() + cfg->logicPath3Suffix),
+                                         ffA->type);
+
+        for (RTLIL::Cell *ff : {ffB, ffC}) {
+            ff->parameters = ffA->parameters;
+            ff->attributes = ffA->attributes;
+            for (const auto &connection : ffA->connections()) {
+                ff->setPort(connection.first, connection.second);
+            }
+        }
+        setCellDomainAttribute(ffA, cfg->logicPath1Suffix);
+        setCellDomainAttribute(ffB, cfg->logicPath2Suffix);
+        setCellDomainAttribute(ffC, cfg->logicPath3Suffix);
+
+        auto [inputPorts, outputPorts] = getPortNames(ffA, mod->design);
+        (void)inputPorts;
+        if (outputPorts.empty()) {
+            log_error("Register TMR: flip-flop '%s' has no output port.\n", ffA->name.c_str());
+        }
+
+        for (RTLIL::IdString port : outputPorts) {
+            RTLIL::SigSpec originalOutput = ffA->getPort(port);
+            RTLIL::Wire *outA = mod->addWire(NEW_ID, originalOutput.size());
+            RTLIL::Wire *outB = mod->addWire(NEW_ID, originalOutput.size());
+            RTLIL::Wire *outC = mod->addWire(NEW_ID, originalOutput.size());
+            ffA->setPort(port, outA);
+            ffB->setPort(port, outB);
+            ffC->setPort(port, outC);
+
+            // The voter is intentionally the only logic placed after the three
+            // register outputs. All combinational logic remains shared.
+            auto [votedOutput, errorOutput] = insertVoter(mod, {outA, outB, outC}, cfg);
+            mod->connect(originalOutput, votedOutput);
+            errorWires.push_back(errorOutput);
+        }
+    }
+
+    log("  Register TMR: inserted voters after %zu flip-flop(s)\n", ffCount);
+    connectErrorSignal(mod, errorWires, cfg);
+}
+
 } // namespace TMRX
 
 YOSYS_NAMESPACE_END

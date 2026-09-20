@@ -16,9 +16,10 @@ TMRX is intended for safety-critical, radiation-tolerant, and high-reliability F
 
 == TMR Strategies
 
-TMRX supports two complementary TMR strategies:
+TMRX supports three complementary TMR strategies:
 
 Logic TMR:: Triplicates internal combinational logic, wires, and flip-flops within a module.
+Register TMR:: Triplicates registers and votes directly after them. It protects SEUs in registers, not SETs in shared combinational logic.
 Full Module TMR:: Instantiates three independent copies of a module with optional output voters.
 
 Both strategies can be mixed within the same design hierarchy.
@@ -27,6 +28,6 @@ Both strategies can be mixed within the same design hierarchy.
 
 * xref:installation.adoc[Install TMRX] using Docker or build from source.
 * Follow the xref:quick-start.adoc[Quick Start] guide for the shortest path to a working run.
-* Read xref:tmr-strategies.adoc[TMR Strategies] to choose between Logic TMR and Full Module TMR.
+* Read xref:tmr-strategies.adoc[TMR Strategies] to choose between the TMR modes.
 * Use xref:yosys-integration.adoc[Yosys Integration] for the exact Yosys pass order and `tmrx_mark` behavior.
 * Configure TMRX with the xref:configuration.adoc[Configuration] guide and the xref:configuration-reference.adoc[Configuration Reference].

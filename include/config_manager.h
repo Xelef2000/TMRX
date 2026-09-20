@@ -17,6 +17,7 @@ enum class TmrMode {
     None,
     FullModuleTMR,
     LogicTMR,
+    RegisterTMR,
 };
 
 enum class TmrVoter { Default, Custom };

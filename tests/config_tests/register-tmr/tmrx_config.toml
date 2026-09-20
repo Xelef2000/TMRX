@@ -1,0 +1,5 @@
+[global]
+tmr_mode = "RegisterTMR"
+tmr_voter_safe_mode = true
+clock_port_names = ["clk_i"]
+reset_port_names = ["rst_ni"]

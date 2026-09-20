@@ -4,9 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TMRX is a Yosys plugin that automatically injects Triple Modular Redundancy (TMR) into digital designs for fault-tolerant FPGA/ASIC flows. It supports two TMR strategies:
+TMRX is a Yosys plugin that automatically injects Triple Modular Redundancy (TMR) into digital designs for fault-tolerant FPGA/ASIC flows. It supports three TMR strategies:
 - **Logic TMR**: Triplicates internal combinational logic, wires, and flip-flops within a module
 - **Full Module TMR**: Instantiates three independent copies of a module with optional output voters
+- **Register TMR**: Triplicates registers only and votes immediately after them
 
 ## Build Commands
 
@@ -48,7 +49,7 @@ The plugin is built as `build/tmrx.so`. Dependencies (yosys-slang and IHP-Open-P
 
 ### Key Types
 
-- `TmrMode`: `None`, `LogicTMR`, `FullModuleTMR`
+- `TmrMode`: `None`, `LogicTMR`, `RegisterTMR`, `FullModuleTMR`
 - `Config`: Full resolved configuration for a module
 - `ConfigPart`: Partial configuration used in layering system
 

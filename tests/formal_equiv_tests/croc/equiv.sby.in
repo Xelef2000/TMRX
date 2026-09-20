@@ -4,7 +4,7 @@
 
 [options]
 mode bmc
-depth 10
+depth 1000
 
 [engines]
 smtbmc
@@ -21,12 +21,11 @@ plugin -i @TMRX_SO@
 # The real tc_sram_impl.sv (IHP SRAM macros) is excluded from the flist.
 read_slang --top croc_soc tc_sram_impl_stub.sv -f @CROC_FLIST_ABS@ \
         --compat-mode --keep-hierarchy \
-        --allow-use-before-declare --ignore-unknown-modules
+        --allow-use-before-declare
 hierarchy -top croc_soc
 # Read IHP standard cell library as blackboxes so sg13g2_* cells instantiated
 # inside tc_clk_mux2 and similar modules are recognised by Yosys.
-# --ignore-unknown-modules only suppresses slang errors; it does NOT create
-# Yosys module definitions, so we must supply them explicitly.
+# Supply IHP standard-cell definitions explicitly for the Yosys design.
 read_verilog -sv @SG13G2_STUBS@
 
 proc; opt; flatten
@@ -39,7 +38,7 @@ design -save gold
 design -reset
 read_slang --top croc_soc tc_sram_impl_stub.sv -f @CROC_FLIST_ABS@ \
         --compat-mode --keep-hierarchy \
-        --allow-use-before-declare --ignore-unknown-modules
+        --allow-use-before-declare
 hierarchy -top croc_soc
 read_verilog -sv @SG13G2_STUBS@
 
