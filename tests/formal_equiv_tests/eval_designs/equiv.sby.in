@@ -1,0 +1,59 @@
+# Unbounded functional equivalence for a tmrx-eval leaf design.
+
+[options]
+mode prove
+depth 20
+
+[engines]
+smtbmc boolector
+
+[script]
+plugin -i @SLANG_SO@
+plugin -i @TMRX_SO@
+
+# Gold implementation. State synchronization comes from the reset contract in
+# the formal wrapper rather than added initial values.
+read_slang --top top @TOP_FILE@ \
+        --compat-mode --keep-hierarchy \
+        --allow-use-before-declare
+hierarchy -check -top top
+setattr -set keep 1 top/w:*Voted
+proc; memory_map; opt; flatten
+opt_clean -purge
+rename top gold_top
+expose gold_top/w:*Voted
+design -save gold
+
+# TMRX implementation, using the evaluation design's original configuration.
+design -reset
+read_slang --top top @TOP_FILE@ \
+        --compat-mode --keep-hierarchy \
+        --allow-use-before-declare
+hierarchy -check -top top
+setattr -set keep 1 top/w:*Voted
+proc; memory_map; opt
+tmrx_mark
+tmrx -c @CONFIG_FILE@
+select -assert-min 1 */t:tmrx_voter_*
+opt -noff
+flatten
+opt_clean -purge
+rename top gate_top
+expose gate_top/w:*Voted_a
+design -save gate
+
+# The wrapper shares all functional inputs, constrains reset, and compares every
+# functional output. Designs with fully reset state also check for no TMRX error.
+design -reset
+design -copy-from gold *
+design -copy-from gate *
+read_verilog -formal -sv @FORMAL_FILE@
+hierarchy -check -top formal_top
+proc; opt
+flatten
+opt_clean
+
+[files]
+@TOP_FILE@
+@CONFIG_FILE@
+@FORMAL_FILE@

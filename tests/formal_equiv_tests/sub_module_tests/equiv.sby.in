@@ -1,11 +1,12 @@
 # Parametric formal equivalence check for sub-module instantiation combinations.
 
 [options]
-mode bmc
-depth 1000
+mode prove
+depth 20
 
 [engines]
-smtbmc
+smtbmc boolector
+abc pdr
 
 [script]
 plugin -i @SLANG_SO@
@@ -34,6 +35,8 @@ hierarchy -check -top top
 proc; opt
 tmrx_mark
 tmrx -c @TOML_FILE@
+# Prevent a vacuous pass if TMRX stops inserting redundancy.
+select -assert-min 1 */t:tmrx_voter_*
 opt -noff
 flatten
 opt_clean -purge
