@@ -1,0 +1,7 @@
+[global]
+tmr_mode = "LogicTMR"
+preserve_module_ports = true
+auto_error_port = true
+
+[global.logic]
+insert_voter_after_ff = true

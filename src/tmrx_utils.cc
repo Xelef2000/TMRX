@@ -531,6 +531,7 @@ void connectErrorSignal(RTLIL::Module *mod, const std::vector<RTLIL::Wire *> &er
         RTLIL::IdString port_name = mod->uniquify(tmrx_auto_error_port_name);
         RTLIL::Wire *new_port = mod->addWire(port_name, 1);
         new_port->port_output = true;
+        new_port->set_bool_attribute(ATTRIBUTE_ERROR_SINK, true);
         mod->fixup_ports();
         log("  Auto-created error port '%s' in module '%s'\n", port_name.c_str(),
             mod->name.c_str());
