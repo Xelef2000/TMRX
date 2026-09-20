@@ -24,10 +24,10 @@ clone_croc_formal = custom_target(
     fi
     if [ ! -d "$CROC_DIR/.git" ]; then
         echo "[INFO] Cloning croc"
-        git clone --recursive "@2@" "$CROC_DIR"
+        git clone "@2@" "$CROC_DIR"
         git -C "$CROC_DIR" checkout "$COMMIT"
     fi
-    git -C "$CROC_DIR" submodule update --init --recursive
+    git -C "$CROC_DIR" -c url."https://github.com/".insteadOf="git@github.com:" submodule update --init --recursive
     touch "@3@"
     '''.format(
             croc_dir,

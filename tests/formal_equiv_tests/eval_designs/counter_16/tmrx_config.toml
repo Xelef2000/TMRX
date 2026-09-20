@@ -1,0 +1,23 @@
+[global]
+tmr_mode = "LogicTMR"
+tmr_voter = "Default"
+preserve_module_ports = true
+auto_error_port = true
+clock_port_names = ["clk_i"]
+expand_clock = false
+reset_port_names = ["rst_ni"]
+expand_reset = false
+tmr_voter_safe_mode = true
+
+[global.logic]
+insert_voter_before_ff = false
+insert_voter_after_ff = true
+logic_path_1_suffix = "_a"
+logic_path_2_suffix = "_b"
+logic_path_3_suffix = "_c"
+additional_ff_cells = ["sg13g2_dfrbpq_1"]
+
+
+[global.full_module]
+insert_voter_before_modules = true
+insert_voter_after_modules = true
