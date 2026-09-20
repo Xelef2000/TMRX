@@ -2,7 +2,7 @@
 
 [options]
 mode bmc
-depth 20
+depth 1000
 
 [engines]
 smtbmc
@@ -16,7 +16,7 @@ plugin -i @TMRX_SO@
 # -------------------------------------------------------------------------
 read_slang --top top @VERILOG_FILE@ \
         --compat-mode --keep-hierarchy \
-        --allow-use-before-declare --ignore-unknown-modules
+        --allow-use-before-declare
 hierarchy -check -top top
 proc; opt; flatten
 opt_clean -purge
@@ -29,7 +29,7 @@ design -save gold
 design -reset
 read_slang --top top @VERILOG_FILE@ \
         --compat-mode --keep-hierarchy \
-        --allow-use-before-declare --ignore-unknown-modules
+        --allow-use-before-declare
 hierarchy -check -top top
 proc; opt
 tmrx_mark

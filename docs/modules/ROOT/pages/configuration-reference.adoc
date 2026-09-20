@@ -16,6 +16,7 @@
 .Valid Values
 `"None"`:: No TMR applied to this module.
 `"LogicTMR"`:: Triplicate internal logic with voters after FFs.
+`"RegisterTMR"`:: Triplicate only flip-flops and insert voters directly after their outputs. This has lower area and timing overhead than LogicTMR, protects register SEUs, and does not protect SETs in shared combinational logic.
 `"FullModuleTMR"`:: Create wrapper with three module instances.
 
 == Voter Options
@@ -50,6 +51,7 @@ The equivalent Verilog attribute is `tmrx_tmr_voter_safe_mode`.
 == Logic TMR Options
 
 Configure in a `[<scope>.logic]` block such as `[global.logic]` or `[module.alu.logic]`.
+The flip-flop detection options below apply to both `LogicTMR` and `RegisterTMR`.
 
 [cols="2,1,1,3",options="header"]
 |===
@@ -58,7 +60,7 @@ Configure in a `[<scope>.logic]` block such as `[global.logic]` or `[module.alu.
 | `insert_voter_after_ff`
 | Bool
 | `true`
-| Insert voters after flip-flop outputs
+| Insert voters after flip-flop outputs in LogicTMR. RegisterTMR always inserts these voters.
 
 | `insert_voter_before_ff`
 | Bool

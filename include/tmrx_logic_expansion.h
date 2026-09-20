@@ -45,6 +45,8 @@ struct ResolvedSubmodule {
 
 void logicTmrExpansion(RTLIL::Module *mod, const ConfigManager *cfgMgr,
                        const Config *cfgOverride = nullptr);
+void registerTmrExpansion(RTLIL::Module *mod, const ConfigManager *cfgMgr,
+                          const Config *cfgOverride = nullptr);
 
 } // namespace TMRX
 YOSYS_NAMESPACE_END

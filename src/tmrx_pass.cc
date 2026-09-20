@@ -103,6 +103,11 @@ struct TmrxPass : public Pass {
                 target->fixup_ports();
             }
 
+            if (cfg->tmrMode == TMRX::TmrMode::RegisterTMR) {
+                TMRX::registerTmrExpansion(target, &cfgMgr, cfg);
+                target->fixup_ports();
+            }
+
             if (cfg->tmrMode == TMRX::TmrMode::FullModuleTMR) {
                 // fullModuleTmrExpansion removes `target` (the _tmrx_worker
                 // template) from the design at the end, so `target` is a

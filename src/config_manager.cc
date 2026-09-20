@@ -289,6 +289,8 @@ std::optional<TmrMode> parseTmrMode(const std::string &str) {
         return TmrMode::FullModuleTMR;
     if (str == cfg_tmr_mode_logic_tmr_name)
         return TmrMode::LogicTMR;
+    if (str == cfg_tmr_mode_register_tmr_name)
+        return TmrMode::RegisterTMR;
     return std::nullopt;
 }
 
@@ -300,6 +302,8 @@ std::string tmrModeToString(TmrMode mode) {
         return cfg_tmr_mode_full_module_tmr_name;
     case TmrMode::LogicTMR:
         return cfg_tmr_mode_logic_tmr_name;
+    case TmrMode::RegisterTMR:
+        return cfg_tmr_mode_register_tmr_name;
     }
     return cfg_unknown_name;
 }
