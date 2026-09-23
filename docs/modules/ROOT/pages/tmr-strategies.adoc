@@ -1,7 +1,7 @@
 = TMR Strategies
-:description: TMRX supports two complementary TMR strategies that can be mixed within the same design.
+:description: TMRX supports three complementary TMR strategies that can be mixed within the same design.
 
-TMRX supports two complementary TMR strategies that can be mixed within the same design hierarchy.
+TMRX supports three complementary TMR strategies that can be mixed within the same design hierarchy.
 
 == Logic TMR
 
@@ -20,6 +20,23 @@ Logic TMR triplicates the *internal logic* of a module while optionally preservi
 . Majority voters are inserted after flip-flop outputs (configurable).
 . If `preserve_module_ports = true`, voters are inserted at outputs to maintain the original interface.
 . If `preserve_module_ports = false`, the module interface is expanded with triplicated ports.
+
+== Register TMR
+
+Register TMR triplicates only flip-flops. A majority voter is inserted directly after every
+triplicated flip-flop output, while all combinational logic, wires, and module ports remain shared.
+
+This is a compact, lower-timing-overhead option when protecting state is the priority. It masks a
+single-event upset (SEU) in a register, but it does *not* protect against a single-event transient
+(SET) in the shared combinational logic. Use Logic TMR when SET protection is required.
+
+The flip-flop detection settings in the `logic` configuration block (`ff_cells`,
+`additional_ff_cells`, and `excluded_ff_cells`) also apply to Register TMR.
+
+Both Logic TMR and Register TMR can enable `correction_feedback`. For clock-enabled FFs, an active
+enable loads the normal next-state value, while an inactive enable loads the majority-voted state.
+This repairs a single corrupted register lane on the next clock edge instead of allowing the lane to
+hold the corrupted value indefinitely.
 
 == Full Module TMR
 
@@ -42,23 +59,32 @@ Full Module TMR creates a *wrapper module* containing three independent instance
 
 == Choosing a Strategy
 
-[cols="1,1,1",options="header"]
+[cols="1,1,1,1",options="header"]
 |===
-| Consideration | Logic TMR | Full Module TMR
+| Consideration | Logic TMR | Register TMR | Full Module TMR
 
 | Interface changes
 | Optional (with `preserve_module_ports`)
 | Optional (with `preserve_module_ports`)
+| Unchanged
 
 | Voter placement
 | After FFs, at outputs
+| Directly after FFs
 | At module boundaries
 
 | Area overhead
 | Generally lower
+| Lowest of the TMR modes
 | Slightly higher (wrapper overhead)
 
+| Fault coverage
+| SEUs and SETs in triplicated logic
+| SEUs in registers only; shared-logic SETs are not covered
+| Depends on module-boundary voter placement
+
 | Black-box modules
+| Not applicable
 | Not applicable
 | Required
 |===

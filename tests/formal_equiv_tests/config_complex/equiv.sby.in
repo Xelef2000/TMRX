@@ -3,11 +3,12 @@
 # per-module TMR config overrides, and custom per-path suffixes.
 
 [options]
-mode bmc
+mode prove
 depth 20
 
 [engines]
-smtbmc
+smtbmc boolector
+abc pdr
 
 [script]
 plugin -i @SLANG_SO@
@@ -18,7 +19,7 @@ plugin -i @TMRX_SO@
 # -------------------------------------------------------------------------
 read_slang --top top top.v \
         --compat-mode --keep-hierarchy \
-        --allow-use-before-declare --ignore-unknown-modules
+        --allow-use-before-declare
 hierarchy -check -top top
 proc; opt; flatten
 opt_clean -purge
@@ -31,11 +32,13 @@ design -save gold
 design -reset
 read_slang --top top top.v \
         --compat-mode --keep-hierarchy \
-        --allow-use-before-declare --ignore-unknown-modules
+        --allow-use-before-declare
 hierarchy -check -top top
 proc; opt
 tmrx_mark
 tmrx -c tmrx_config.toml
+# Prevent a vacuous pass if TMRX stops inserting redundancy.
+select -assert-min 1 */t:tmrx_voter_*
 opt -noff
 flatten
 opt_clean -purge

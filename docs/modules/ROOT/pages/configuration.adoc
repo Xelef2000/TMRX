@@ -42,6 +42,7 @@ expand_reset = false
 [global.logic]
 insert_voter_after_ff = true
 insert_voter_before_ff = false
+correction_feedback = false
 logic_path_1_suffix = "_a"
 logic_path_2_suffix = "_b"
 logic_path_3_suffix = "_c"
@@ -100,6 +101,10 @@ expand_reset = true
 
 [module.alu.logic]
 insert_voter_after_ff = true
+
+[module.state_machine]
+# Lower-overhead state protection; combinational SETs remain unprotected.
+tmr_mode = "RegisterTMR"
 
 [module.register_file]
 tmr_mode = "FullModuleTMR"

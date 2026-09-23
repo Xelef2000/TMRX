@@ -15,7 +15,7 @@ test(
   'simple_ff_logic_tmr_equiv',
   sby,
   args: ['-f', 'equiv.sby'],
-  timeout: 300,
+  timeout: 3600,
   workdir: meson.current_build_dir(),
   depends: [slang_build, tmrx],
   suite: 'formal_equiv_tests',

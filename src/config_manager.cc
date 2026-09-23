@@ -79,12 +79,23 @@ const std::set<std::string> &logicConfigKeys() {
     static const std::set<std::string> keys = {
         cfg_insert_voter_before_ff_key_name,
         cfg_insert_voter_after_ff_key_name,
+        cfg_correction_feedback_key_name,
+        cfg_ff_port_mappings_key_name,
         cfg_ff_cells_key_name,
         cfg_additional_ff_cells_key_name,
         cfg_excluded_ff_cells_key_name,
         cfg_logic_path_1_suffix_key_name,
         cfg_logic_path_2_suffix_key_name,
         cfg_logic_path_3_suffix_key_name,
+    };
+    return keys;
+}
+
+const std::set<std::string> &ffPortMappingKeys() {
+    static const std::set<std::string> keys = {
+        cfg_ff_clock_port_key_name,         cfg_ff_data_port_key_name,
+        cfg_ff_output_port_key_name,        cfg_ff_enable_port_key_name,
+        cfg_ff_enable_active_high_key_name,
     };
     return keys;
 }
@@ -181,6 +192,7 @@ ConfigPart parseLogicConfigPart(const toml::value &t) {
 
     cfg.insertVoterBeforeFf = tomlFindOptional<bool>(t, cfg_insert_voter_before_ff_key_name);
     cfg.insertVoterAfterFf = tomlFindOptional<bool>(t, cfg_insert_voter_after_ff_key_name);
+    cfg.correctionFeedback = tomlFindOptional<bool>(t, cfg_correction_feedback_key_name);
 
     cfg.logicPath1Suffix = tomlFindOptional<std::string>(t, cfg_logic_path_1_suffix_key_name);
     cfg.logicPath2Suffix = tomlFindOptional<std::string>(t, cfg_logic_path_2_suffix_key_name);
@@ -189,6 +201,45 @@ ConfigPart parseLogicConfigPart(const toml::value &t) {
     cfg.ffCells = tomlParseIdStringPool(t, cfg_ff_cells_key_name);
     cfg.additionalFfCells = tomlParseIdStringPool(t, cfg_additional_ff_cells_key_name);
     cfg.excludedFfCells = tomlParseIdStringPool(t, cfg_excluded_ff_cells_key_name);
+
+    if (t.contains(cfg_ff_port_mappings_key_name)) {
+        const auto &mappingTable = t.at(cfg_ff_port_mappings_key_name);
+        ensureTable(mappingTable, cfg_ff_port_mappings_key_name);
+
+        Yosys::dict<Yosys::RTLIL::IdString, FfPortConfig> mappings;
+        for (const auto &[cellName, mappingValue] : mappingTable.as_table()) {
+            const std::string context = std::string(cfg_ff_port_mappings_key_name) + "." + cellName;
+            validateKnownKeys(mappingValue, ffPortMappingKeys(), context);
+
+            for (const char *requiredKey : {cfg_ff_clock_port_key_name, cfg_ff_data_port_key_name,
+                                            cfg_ff_output_port_key_name}) {
+                if (!mappingValue.contains(requiredKey)) {
+                    Yosys::log_error("Missing required config key '%s' in scope '%s'.\n",
+                                     requiredKey, context.c_str());
+                }
+            }
+
+            FfPortConfig ports;
+            ports.clockPort =
+                makeRtlilId(toml::find<std::string>(mappingValue, cfg_ff_clock_port_key_name));
+            ports.dataPort =
+                makeRtlilId(toml::find<std::string>(mappingValue, cfg_ff_data_port_key_name));
+            ports.outputPort =
+                makeRtlilId(toml::find<std::string>(mappingValue, cfg_ff_output_port_key_name));
+            std::string enablePort =
+                toml::find_or<std::string>(mappingValue, cfg_ff_enable_port_key_name, "");
+            ports.enablePort =
+                enablePort.empty() ? Yosys::RTLIL::IdString() : makeRtlilId(enablePort);
+            ports.enableActiveHigh =
+                toml::find_or<bool>(mappingValue, cfg_ff_enable_active_high_key_name, true);
+
+            Yosys::RTLIL::IdString cellType = !cellName.empty() && cellName[0] == '$'
+                                                  ? Yosys::RTLIL::IdString(cellName)
+                                                  : makeRtlilId(cellName);
+            mappings[cellType] = ports;
+        }
+        cfg.ffPortMappings = mappings;
+    }
 
     return cfg;
 }
@@ -228,6 +279,7 @@ void mergeConfigPart(ConfigPart &dest, const ConfigPart &src) {
     mergeOptionalField(dest.preventRenaming, src.preventRenaming);
     mergeOptionalField(dest.insertVoterBeforeFf, src.insertVoterBeforeFf);
     mergeOptionalField(dest.insertVoterAfterFf, src.insertVoterAfterFf);
+    mergeOptionalField(dest.correctionFeedback, src.correctionFeedback);
     mergeOptionalField(dest.tmrModeFullModuleInsertVoterBeforeModules,
                        src.tmrModeFullModuleInsertVoterBeforeModules);
     mergeOptionalField(dest.tmrModeFullModuleInsertVoterAfterModules,
@@ -243,6 +295,7 @@ void mergeConfigPart(ConfigPart &dest, const ConfigPart &src) {
     mergeOptionalField(dest.ffCells, src.ffCells);
     mergeOptionalField(dest.additionalFfCells, src.additionalFfCells);
     mergeOptionalField(dest.excludedFfCells, src.excludedFfCells);
+    mergeOptionalField(dest.ffPortMappings, src.ffPortMappings);
     mergeOptionalField(dest.logicPath1Suffix, src.logicPath1Suffix);
     mergeOptionalField(dest.logicPath2Suffix, src.logicPath2Suffix);
     mergeOptionalField(dest.logicPath3Suffix, src.logicPath3Suffix);
@@ -289,6 +342,8 @@ std::optional<TmrMode> parseTmrMode(const std::string &str) {
         return TmrMode::FullModuleTMR;
     if (str == cfg_tmr_mode_logic_tmr_name)
         return TmrMode::LogicTMR;
+    if (str == cfg_tmr_mode_register_tmr_name)
+        return TmrMode::RegisterTMR;
     return std::nullopt;
 }
 
@@ -300,6 +355,8 @@ std::string tmrModeToString(TmrMode mode) {
         return cfg_tmr_mode_full_module_tmr_name;
     case TmrMode::LogicTMR:
         return cfg_tmr_mode_logic_tmr_name;
+    case TmrMode::RegisterTMR:
+        return cfg_tmr_mode_register_tmr_name;
     }
     return cfg_unknown_name;
 }
@@ -410,6 +467,7 @@ void ConfigManager::loadGlobalDefaultCfg() {
 
     globalCfg.insertVoterBeforeFf = false;
     globalCfg.insertVoterAfterFf = true;
+    globalCfg.correctionFeedback = false;
 
     globalCfg.tmrModeFullModuleInsertVoterBeforeModules = false;
     globalCfg.tmrModeFullModuleInsertVoterAfterModules = true;
@@ -425,6 +483,7 @@ void ConfigManager::loadGlobalDefaultCfg() {
     globalCfg.ffCells = {};
     globalCfg.additionalFfCells = {};
     globalCfg.excludedFfCells = {};
+    globalCfg.ffPortMappings = {};
 
     globalCfg.logicPath1Suffix = cfg_default_logic_path_1_suffix;
     globalCfg.logicPath2Suffix = cfg_default_logic_path_2_suffix;
@@ -548,6 +607,7 @@ ConfigPart ConfigManager::parseModuleAnnotations(const Yosys::RTLIL::Module *mod
     cfg.preventRenaming = getBoolAttrValue(mod, cfg_prevent_renaming_attr_name);
     cfg.insertVoterBeforeFf = getBoolAttrValue(mod, cfg_insert_voter_before_ff_attr_name);
     cfg.insertVoterAfterFf = getBoolAttrValue(mod, cfg_insert_voter_after_ff_attr_name);
+    cfg.correctionFeedback = getBoolAttrValue(mod, cfg_correction_feedback_attr_name);
     cfg.tmrModeFullModuleInsertVoterBeforeModules =
         getBoolAttrValue(mod, cfg_tmr_mode_full_module_insert_voter_before_modules_attr_name);
     cfg.tmrModeFullModuleInsertVoterAfterModules =
@@ -595,6 +655,7 @@ Config ConfigManager::assembleConfig(std::vector<ConfigPart> parts, Config def) 
         applyIfPresent(cfg.preventRenaming, part.preventRenaming);
         applyIfPresent(cfg.insertVoterBeforeFf, part.insertVoterBeforeFf);
         applyIfPresent(cfg.insertVoterAfterFf, part.insertVoterAfterFf);
+        applyIfPresent(cfg.correctionFeedback, part.correctionFeedback);
         applyIfPresent(cfg.tmrModeFullModuleInsertVoterBeforeModules,
                        part.tmrModeFullModuleInsertVoterBeforeModules);
         applyIfPresent(cfg.tmrModeFullModuleInsertVoterAfterModules,
@@ -610,6 +671,7 @@ Config ConfigManager::assembleConfig(std::vector<ConfigPart> parts, Config def) 
         applyIfPresent(cfg.ffCells, part.ffCells);
         applyIfPresent(cfg.additionalFfCells, part.additionalFfCells);
         applyIfPresent(cfg.excludedFfCells, part.excludedFfCells);
+        applyIfPresent(cfg.ffPortMappings, part.ffPortMappings);
         applyIfPresent(cfg.logicPath1Suffix, part.logicPath1Suffix);
         applyIfPresent(cfg.logicPath2Suffix, part.logicPath2Suffix);
         applyIfPresent(cfg.logicPath3Suffix, part.logicPath3Suffix);
@@ -828,11 +890,26 @@ void ConfigManager::validateCfg(Yosys::RTLIL::Design *design) {
                 Yosys::log_warning(
                     "Module '%s': insert_voter_after_ff has no effect in FullModuleTMR mode.\n",
                     mod);
+            if (c.correctionFeedback)
+                Yosys::log_warning("Module '%s': correction_feedback has no effect in "
+                                   "FullModuleTMR mode.\n",
+                                   mod);
             if (!c.ffCells.empty() || !c.additionalFfCells.empty() || !c.excludedFfCells.empty())
                 Yosys::log_warning(
                     "Module '%s': ff_cells / additional_ff_cells / excluded_ff_cells have no "
                     "effect in FullModuleTMR mode.\n",
                     mod);
+        }
+
+        if (c.tmrMode == TmrMode::LogicTMR && c.correctionFeedback && !c.insertVoterAfterFf) {
+            Yosys::log_error("Module '%s': correction_feedback requires "
+                             "logic.insert_voter_after_ff = true.\n",
+                             mod);
+        }
+
+        if (c.tmrMode == TmrMode::None && c.correctionFeedback) {
+            Yosys::log_warning(
+                "Module '%s': correction_feedback has no effect when tmr_mode is None.\n", mod);
         }
 
         // Check 9: voter_on_clock/reset_nets is a no-op when the net is not expanded.
@@ -1063,6 +1140,7 @@ std::string ConfigManager::getConfigAsString(Yosys::RTLIL::Module *mod) const {
     ret += "Prevent Renaming: " + boolToString(c->preventRenaming) + "\n";
     ret += "Logic.insertVoterBeforeFf: " + boolToString(c->insertVoterBeforeFf) + "\n";
     ret += "Logic.insertVoterAfterFf: " + boolToString(c->insertVoterAfterFf) + "\n";
+    ret += "Logic.correctionFeedback: " + boolToString(c->correctionFeedback) + "\n";
     ret += "Full Module.insert_voter_before_modules: " +
            boolToString(c->tmrModeFullModuleInsertVoterBeforeModules) + "\n";
     ret += "Full Module.insert_voter_after_modules: " +
@@ -1078,6 +1156,7 @@ std::string ConfigManager::getConfigAsString(Yosys::RTLIL::Module *mod) const {
     ret += "FF Cells: " + poolToString(c->ffCells) + "\n";
     ret += "Additional FF Cells: " + poolToString(c->additionalFfCells) + "\n";
     ret += "Excluded FF Cells: " + poolToString(c->excludedFfCells) + "\n";
+    ret += "FF Port Mappings: " + std::to_string(c->ffPortMappings.size()) + "\n";
     ret += "Logic.logicPath1Suffix: " + c->logicPath1Suffix + "\n";
     ret += "Logic.logicPath2Suffix: " + c->logicPath2Suffix + "\n";
     ret += "Logic.logicPath3Suffix: " + c->logicPath3Suffix + "\n";

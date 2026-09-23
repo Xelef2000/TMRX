@@ -1,0 +1,53 @@
+# Prove that one arbitrary faulty TMR register lane is masked and reported.
+
+[options]
+mode prove
+depth 20
+
+[engines]
+smtbmc boolector
+
+[script]
+plugin -i @TMRX_SO@
+
+# Gold design. Its state is initialized only through the formal reset contract.
+read_verilog fi_counter.v
+hierarchy -check -top fi_counter
+proc; opt
+rename fi_counter fi_counter_gold
+design -save gold
+
+# TMR design. Expose and cut each raw FF output so the wrapper can inject a
+# symbolic fault before the correction voters without naming generated wires.
+design -reset
+read_verilog fi_counter.v
+hierarchy -check -top fi_counter
+proc; opt
+tmrx_mark
+tmrx -c tmrx_config.toml
+select -assert-min 1 */t:tmrx_voter_*
+
+rename -enumerate -pattern fault_lane_a_% fi_counter/c:*_a %x:+[Q] fi_counter/w:* %i
+rename -enumerate -pattern fault_lane_b_% fi_counter/c:*_b %x:+[Q] fi_counter/w:* %i
+rename -enumerate -pattern fault_lane_c_% fi_counter/c:*_c %x:+[Q] fi_counter/w:* %i
+select -assert-count 1 fi_counter/w:fault_lane_a_0
+select -assert-count 1 fi_counter/w:fault_lane_b_0
+select -assert-count 1 fi_counter/w:fault_lane_c_0
+expose -cut -sep __cut fi_counter/w:fault_lane_?_0
+rename fi_counter fi_counter_tmr
+design -save gate
+
+# Assemble the formal wrapper with both implementations.
+design -reset
+design -copy-from gold *
+design -copy-from gate *
+read_verilog -formal -sv formal_top.sv
+hierarchy -check -top formal_top
+proc; opt
+flatten
+opt_clean
+
+[files]
+fi_counter.v
+tmrx_config.toml
+formal_top.sv

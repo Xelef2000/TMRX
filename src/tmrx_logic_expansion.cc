@@ -46,6 +46,44 @@ bool isExposedModulePort(const RTLIL::Wire *wire) {
     return wire != nullptr && (wire->port_input || wire->port_output);
 }
 
+void insertCorrectionFeedback(RTLIL::Module *mod, RTLIL::Cell *flipFlop, RTLIL::IdString outputPort,
+                              const RTLIL::SigSpec &votedOutput, const Config *cfg) {
+    if (!cfg->correctionFeedback)
+        return;
+
+    auto portConfig = getFfPortConfig(flipFlop, cfg);
+    if (!portConfig) {
+        log_error("Flip-flop '%s' (type '%s') requires a logic.ff_port_mappings entry when "
+                  "correction_feedback is enabled.\n",
+                  flipFlop->name.c_str(), flipFlop->type.c_str());
+    }
+
+    if (outputPort != portConfig->outputPort || portConfig->enablePort.empty())
+        return;
+
+    RTLIL::SigSpec clock = flipFlop->getPort(portConfig->clockPort);
+    RTLIL::SigSpec enable = flipFlop->getPort(portConfig->enablePort);
+    RTLIL::SigSpec data = flipFlop->getPort(portConfig->dataPort);
+
+    if (clock.size() != 1 || enable.size() != 1) {
+        log_error("Flip-flop '%s' correction feedback requires one-bit clock and enable ports.\n",
+                  flipFlop->name.c_str());
+    }
+    if (data.size() != votedOutput.size()) {
+        log_error("Flip-flop '%s' correction feedback data width (%d) does not match voted "
+                  "output width (%d).\n",
+                  flipFlop->name.c_str(), data.size(), votedOutput.size());
+    }
+
+    RTLIL::SigSpec enableActive = portConfig->enableActiveHigh ? enable : mod->Not(NEW_ID, enable);
+    RTLIL::SigSpec correctedData = mod->Mux(NEW_ID, votedOutput, data, enableActive);
+
+    flipFlop->setPort(portConfig->dataPort, correctedData);
+    flipFlop->setPort(
+        portConfig->enablePort,
+        RTLIL::SigSpec(portConfig->enableActiveHigh ? RTLIL::State::S1 : RTLIL::State::S0));
+}
+
 TriplicatedSignals deriveParentSignals(
     const RTLIL::SigSpec &signalA,
     const dict<RTLIL::SigSpec, std::pair<RTLIL::SigSpec, RTLIL::SigSpec>> &wireMap) {
@@ -321,6 +359,8 @@ std::vector<RTLIL::Wire *> insertVoterAfterFf(RTLIL::Module *mod,
     for (auto flipFlops : ffMap) {
 
         auto [input_ports, output_ports] = getPortNames(flipFlops.first, mod->design);
+        std::vector<RTLIL::Cell *> copies = {flipFlops.first, flipFlops.second.first,
+                                             flipFlops.second.second};
 
         if (output_ports.empty()) {
             log("Cell Type: %s\n", flipFlops.first->type.str().c_str());
@@ -331,7 +371,7 @@ std::vector<RTLIL::Wire *> insertVoterAfterFf(RTLIL::Module *mod,
             std::vector<RTLIL::SigSpec> intermediateWires;
             std::vector<RTLIL::SigSpec> originalSignals;
 
-        for (auto ff : {flipFlops.first, flipFlops.second.first, flipFlops.second.second}) {
+            for (auto ff : copies) {
                 RTLIL::SigSpec out_signal = ff->getPort(port);
                 RTLIL::Wire *intermediate_wire = mod->addWire(NEW_ID, out_signal.size());
 
@@ -347,6 +387,7 @@ std::vector<RTLIL::Wire *> insertVoterAfterFf(RTLIL::Module *mod,
                                        : (i == 1 ? cfg->logicPath2Suffix
                                                  : cfg->logicPath3Suffix));
                 mod->connect(originalSignals.at(i), resultWires.first);
+                insertCorrectionFeedback(mod, copies.at(i), port, resultWires.first, cfg);
 
                 errorSignals.push_back(resultWires.second);
             }
@@ -569,6 +610,68 @@ void logicTmrExpansion(RTLIL::Module *mod, const ConfigManager *cfgMgr, const Co
         errorWires.insert(errorWires.end(), voterErrorWires.begin(), voterErrorWires.end());
     }
 
+    connectErrorSignal(mod, errorWires, cfg);
+}
+
+void registerTmrExpansion(RTLIL::Module *mod, const ConfigManager *cfgMgr,
+                          const Config *cfgOverride) {
+    const Config *cfg = cfgOverride ? cfgOverride : cfgMgr->getConfig(mod);
+    std::vector<RTLIL::Cell *> originalCells(mod->cells().begin(), mod->cells().end());
+    std::vector<RTLIL::Wire *> errorWires;
+    size_t ffCount = 0;
+
+    log("  Register TMR: triplicating flip-flops in '%s' (%zu cell(s))\n", mod->name.c_str(),
+        originalCells.size());
+
+    for (RTLIL::Cell *ffA : originalCells) {
+        if (!isFlipFlop(ffA, mod, cfg)) {
+            continue;
+        }
+
+        ffCount++;
+        RTLIL::Cell *ffB = mod->addCell(mod->uniquify(ffA->name.str() + cfg->logicPath2Suffix),
+                                         ffA->type);
+        RTLIL::Cell *ffC = mod->addCell(mod->uniquify(ffA->name.str() + cfg->logicPath3Suffix),
+                                         ffA->type);
+
+        for (RTLIL::Cell *ff : {ffB, ffC}) {
+            ff->parameters = ffA->parameters;
+            ff->attributes = ffA->attributes;
+            for (const auto &connection : ffA->connections()) {
+                ff->setPort(connection.first, connection.second);
+            }
+        }
+        setCellDomainAttribute(ffA, cfg->logicPath1Suffix);
+        setCellDomainAttribute(ffB, cfg->logicPath2Suffix);
+        setCellDomainAttribute(ffC, cfg->logicPath3Suffix);
+
+        auto [inputPorts, outputPorts] = getPortNames(ffA, mod->design);
+        (void)inputPorts;
+        if (outputPorts.empty()) {
+            log_error("Register TMR: flip-flop '%s' has no output port.\n", ffA->name.c_str());
+        }
+
+        for (RTLIL::IdString port : outputPorts) {
+            RTLIL::SigSpec originalOutput = ffA->getPort(port);
+            RTLIL::Wire *outA = mod->addWire(NEW_ID, originalOutput.size());
+            RTLIL::Wire *outB = mod->addWire(NEW_ID, originalOutput.size());
+            RTLIL::Wire *outC = mod->addWire(NEW_ID, originalOutput.size());
+            ffA->setPort(port, outA);
+            ffB->setPort(port, outB);
+            ffC->setPort(port, outC);
+
+            // The voter is intentionally the only logic placed after the three
+            // register outputs. All combinational logic remains shared.
+            auto [votedOutput, errorOutput] = insertVoter(mod, {outA, outB, outC}, cfg);
+            mod->connect(originalOutput, votedOutput);
+            insertCorrectionFeedback(mod, ffA, port, votedOutput, cfg);
+            insertCorrectionFeedback(mod, ffB, port, votedOutput, cfg);
+            insertCorrectionFeedback(mod, ffC, port, votedOutput, cfg);
+            errorWires.push_back(errorOutput);
+        }
+    }
+
+    log("  Register TMR: inserted voters after %zu flip-flop(s)\n", ffCount);
     connectErrorSignal(mod, errorWires, cfg);
 }
 

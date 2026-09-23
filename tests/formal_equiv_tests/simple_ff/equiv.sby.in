@@ -1,9 +1,9 @@
 # Formal equivalence check: simple_ff original vs. TMRX LogicTMR expansion.
 #
-# Strategy: bounded model checking (BMC) starting from the fixed initial state
+# Strategy: temporal induction starting from the fixed initial state
 # defined by the 'initial' blocks in the RTL.  TMRX propagates 'init'
 # attributes to all three TMR copies, so gold and gate both start at all-zeros
-# and BMC is a complete proof for input sequences up to <depth> cycles.
+# and induction proves equivalence for every input sequence at every cycle.
 #
 # The script builds two design checkpoints in Yosys:
 #   gold  – original RTL, processed to generic cells
@@ -11,11 +11,12 @@
 # Both are merged into a miter circuit whose output assertions are checked.
 
 [options]
-mode bmc
+mode prove
 depth 20
 
 [engines]
-smtbmc
+smtbmc boolector
+abc pdr
 
 [script]
 # Load plugins once; they persist across design -reset.
@@ -43,6 +44,8 @@ hierarchy -top simple_ff -check
 proc; opt; flatten
 tmrx_mark
 tmrx -c tmrx_config.toml
+# Prevent a vacuous pass if TMRX stops inserting redundancy.
+select -assert-min 1 */t:tmrx_voter_*
 opt -noff
 
 write_verilog -noattr final.v

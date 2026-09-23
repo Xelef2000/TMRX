@@ -62,7 +62,7 @@ foreach v_file : verilog_files
                     test_name,
                     sby,
                     args: ['-f', sby_filename],
-                    timeout: 300,
+                    timeout: 3600,
                     workdir: meson.current_build_dir(),
                     depends: [slang_build, tmrx],
                     suite: 'formal_equiv_tests',
