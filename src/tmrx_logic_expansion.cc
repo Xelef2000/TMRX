@@ -46,6 +46,44 @@ bool isExposedModulePort(const RTLIL::Wire *wire) {
     return wire != nullptr && (wire->port_input || wire->port_output);
 }
 
+void insertCorrectionFeedback(RTLIL::Module *mod, RTLIL::Cell *flipFlop, RTLIL::IdString outputPort,
+                              const RTLIL::SigSpec &votedOutput, const Config *cfg) {
+    if (!cfg->correctionFeedback)
+        return;
+
+    auto portConfig = getFfPortConfig(flipFlop, cfg);
+    if (!portConfig) {
+        log_error("Flip-flop '%s' (type '%s') requires a logic.ff_port_mappings entry when "
+                  "correction_feedback is enabled.\n",
+                  flipFlop->name.c_str(), flipFlop->type.c_str());
+    }
+
+    if (outputPort != portConfig->outputPort || portConfig->enablePort.empty())
+        return;
+
+    RTLIL::SigSpec clock = flipFlop->getPort(portConfig->clockPort);
+    RTLIL::SigSpec enable = flipFlop->getPort(portConfig->enablePort);
+    RTLIL::SigSpec data = flipFlop->getPort(portConfig->dataPort);
+
+    if (clock.size() != 1 || enable.size() != 1) {
+        log_error("Flip-flop '%s' correction feedback requires one-bit clock and enable ports.\n",
+                  flipFlop->name.c_str());
+    }
+    if (data.size() != votedOutput.size()) {
+        log_error("Flip-flop '%s' correction feedback data width (%d) does not match voted "
+                  "output width (%d).\n",
+                  flipFlop->name.c_str(), data.size(), votedOutput.size());
+    }
+
+    RTLIL::SigSpec enableActive = portConfig->enableActiveHigh ? enable : mod->Not(NEW_ID, enable);
+    RTLIL::SigSpec correctedData = mod->Mux(NEW_ID, votedOutput, data, enableActive);
+
+    flipFlop->setPort(portConfig->dataPort, correctedData);
+    flipFlop->setPort(
+        portConfig->enablePort,
+        RTLIL::SigSpec(portConfig->enableActiveHigh ? RTLIL::State::S1 : RTLIL::State::S0));
+}
+
 TriplicatedSignals deriveParentSignals(
     const RTLIL::SigSpec &signalA,
     const dict<RTLIL::SigSpec, std::pair<RTLIL::SigSpec, RTLIL::SigSpec>> &wireMap) {
@@ -321,6 +359,8 @@ std::vector<RTLIL::Wire *> insertVoterAfterFf(RTLIL::Module *mod,
     for (auto flipFlops : ffMap) {
 
         auto [input_ports, output_ports] = getPortNames(flipFlops.first, mod->design);
+        std::vector<RTLIL::Cell *> copies = {flipFlops.first, flipFlops.second.first,
+                                             flipFlops.second.second};
 
         if (output_ports.empty()) {
             log("Cell Type: %s\n", flipFlops.first->type.str().c_str());
@@ -331,7 +371,7 @@ std::vector<RTLIL::Wire *> insertVoterAfterFf(RTLIL::Module *mod,
             std::vector<RTLIL::SigSpec> intermediateWires;
             std::vector<RTLIL::SigSpec> originalSignals;
 
-        for (auto ff : {flipFlops.first, flipFlops.second.first, flipFlops.second.second}) {
+            for (auto ff : copies) {
                 RTLIL::SigSpec out_signal = ff->getPort(port);
                 RTLIL::Wire *intermediate_wire = mod->addWire(NEW_ID, out_signal.size());
 
@@ -347,6 +387,7 @@ std::vector<RTLIL::Wire *> insertVoterAfterFf(RTLIL::Module *mod,
                                        : (i == 1 ? cfg->logicPath2Suffix
                                                  : cfg->logicPath3Suffix));
                 mod->connect(originalSignals.at(i), resultWires.first);
+                insertCorrectionFeedback(mod, copies.at(i), port, resultWires.first, cfg);
 
                 errorSignals.push_back(resultWires.second);
             }
@@ -623,6 +664,9 @@ void registerTmrExpansion(RTLIL::Module *mod, const ConfigManager *cfgMgr,
             // register outputs. All combinational logic remains shared.
             auto [votedOutput, errorOutput] = insertVoter(mod, {outA, outB, outC}, cfg);
             mod->connect(originalOutput, votedOutput);
+            insertCorrectionFeedback(mod, ffA, port, votedOutput, cfg);
+            insertCorrectionFeedback(mod, ffB, port, votedOutput, cfg);
+            insertCorrectionFeedback(mod, ffC, port, votedOutput, cfg);
             errorWires.push_back(errorOutput);
         }
     }

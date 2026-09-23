@@ -42,6 +42,45 @@ bool isFlipFlop(const RTLIL::Cell *cell, const RTLIL::Module *module, const Conf
     return false;
 }
 
+std::optional<FfPortConfig> getFfPortConfig(const RTLIL::Cell *cell, const Config *cfg) {
+    FfPortConfig ports;
+
+    if (cfg->ffPortMappings.count(cell->type) != 0) {
+        ports = cfg->ffPortMappings.at(cell->type);
+    } else if (RTLIL::builtin_ff_cell_types().count(cell->type) != 0) {
+        if (cell->type == ID($sdffce)) {
+            log_error("Flip-flop '%s' uses unsupported enable-over-synchronous-reset semantics "
+                      "for correction feedback. Run dffunmap before TMRX or disable "
+                      "correction_feedback.\n",
+                      cell->name.c_str());
+        }
+        ports.clockPort = ID::CLK;
+        ports.dataPort = ID::D;
+        ports.outputPort = ID::Q;
+        ports.enablePort = cell->hasPort(ID::EN) ? ID::EN : RTLIL::IdString();
+        ports.enableActiveHigh =
+            !cell->hasParam(ID::EN_POLARITY) || cell->getParam(ID::EN_POLARITY).as_bool();
+    } else {
+        return std::nullopt;
+    }
+
+    for (const auto &requiredPort : {ports.clockPort, ports.dataPort, ports.outputPort}) {
+        if (requiredPort.empty() || !cell->hasPort(requiredPort)) {
+            log_error("Flip-flop '%s' (type '%s') correction-feedback mapping references missing "
+                      "port '%s'.\n",
+                      cell->name.c_str(), cell->type.c_str(), requiredPort.c_str());
+        }
+    }
+
+    if (!ports.enablePort.empty() && !cell->hasPort(ports.enablePort)) {
+        log_error("Flip-flop '%s' (type '%s') correction-feedback mapping references missing "
+                  "enable port '%s'.\n",
+                  cell->name.c_str(), cell->type.c_str(), ports.enablePort.c_str());
+    }
+
+    return ports;
+}
+
 // Move ids to header
 //  TODO: check attr if it is a submodule port
 bool isClkWire(const RTLIL::Wire *w, const Config *cfg) {

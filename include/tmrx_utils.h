@@ -9,6 +9,7 @@ namespace TMRX {
 
 bool isProperSubmodule(RTLIL::Module *mod);
 bool isFlipFlop(const RTLIL::Cell *cell, const RTLIL::Module *module, const Config *cfg);
+std::optional<FfPortConfig> getFfPortConfig(const RTLIL::Cell *cell, const Config *cfg);
 bool isClkWire(const RTLIL::Wire *w, const Config *cfg);
 bool isClkWire(RTLIL::IdString port, const Config *cfg);
 bool isRstWire(RTLIL::IdString port, const Config *cfg);

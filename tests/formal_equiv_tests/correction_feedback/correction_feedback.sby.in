@@ -1,0 +1,53 @@
+[options]
+mode prove
+depth 2
+
+[engines]
+smtbmc boolector
+
+[script]
+plugin -i @TMRX_SO@
+
+read_verilog top.v
+hierarchy -check -top top
+proc; opt
+rename top gold_top
+design -save gold
+
+design -reset
+read_verilog top.v
+hierarchy -check -top top
+proc; opt
+tmrx_mark
+tmrx -c tmrx_config.toml
+select -assert-min 1 */t:tmrx_voter_*
+
+rename -enumerate -pattern feedback_lane_a_% top/c:*_a %x:+[Q] top/w:* %i
+rename -enumerate -pattern feedback_lane_b_% top/c:*_b %x:+[Q] top/w:* %i
+rename -enumerate -pattern feedback_lane_c_% top/c:*_c %x:+[Q] top/w:* %i
+rename -enumerate -pattern feedback_data_a_% top/c:*_a %x:+[D] top/w:* %i
+rename -enumerate -pattern feedback_data_b_% top/c:*_b %x:+[D] top/w:* %i
+rename -enumerate -pattern feedback_data_c_% top/c:*_c %x:+[D] top/w:* %i
+select -assert-count 1 top/w:feedback_lane_a_0
+select -assert-count 1 top/w:feedback_lane_b_0
+select -assert-count 1 top/w:feedback_lane_c_0
+select -assert-count 1 top/w:feedback_data_a_0
+select -assert-count 1 top/w:feedback_data_b_0
+select -assert-count 1 top/w:feedback_data_c_0
+expose top/w:feedback_lane_?_0 top/w:feedback_data_?_0
+rename top gate_top
+design -save gate
+
+design -reset
+design -copy-from gold *
+design -copy-from gate *
+read_verilog -formal -sv formal_top.sv
+hierarchy -check -top formal_top
+proc; opt; flatten
+clk2fflogic
+opt_clean
+
+[files]
+top.v
+tmrx_config.toml
+formal_top.sv

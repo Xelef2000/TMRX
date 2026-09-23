@@ -67,6 +67,16 @@ The flip-flop detection options below apply to both `LogicTMR` and `RegisterTMR`
 | `false`
 | Insert voters before flip-flop inputs (*planned, not yet implemented*)
 
+| `correction_feedback`
+| Bool
+| `false`
+| When an FF clock-enable is inactive, load the voted state on the next active clock edge instead of holding the local lane state. LogicTMR requires `insert_voter_after_ff = true`; RegisterTMR always has the required voters.
+
+| `ff_port_mappings`
+| Table
+| `{}`
+| Port descriptions for PDK FF cells. Yosys built-in FF cells are recognized automatically.
+
 | `ff_cells`
 | List
 | `[]`
@@ -229,6 +239,45 @@ ff_cells = ["sg13g2_dfrbp_1"]
 additional_ff_cells = ["MY_CUSTOM_FF"]
 excluded_ff_cells = ["sg13g2_dfrbp_1"]
 ----
+
+=== Correction Feedback
+
+With `correction_feedback = true`, TMRX replaces clock-enable hold behavior with a data mux:
+
+* enable active: load the original data input;
+* enable inactive: load the majority-voted FF output;
+* the physical FF enable is held active so correction occurs on the next active clock edge.
+
+This preserves normal updates while allowing one corrupted lane to rejoin the majority during an
+otherwise idle cycle. FFs without a clock-enable are unchanged. The option is disabled by default.
+
+Yosys built-in enabled FFs are handled automatically. PDK cells listed in `ff_cells` or
+`additional_ff_cells` require a mapping:
+
+[source,toml]
+----
+[global.logic]
+correction_feedback = true
+additional_ff_cells = ["MY_DFFE"]
+
+[global.logic.ff_port_mappings.MY_DFFE]
+clock_port = "CLK"
+data_port = "D"
+output_port = "Q"
+enable_port = "EN_N"
+enable_active_high = false
+----
+
+`clock_port`, `data_port`, and `output_port` are required. `enable_port` is optional; omitting it
+declares that the cell has no clock-enable and therefore needs no correction-feedback rewrite.
+`enable_active_high` defaults to `true`.
+
+[IMPORTANT]
+====
+Mapped PDK cells must give reset and asynchronous-load controls priority over clock enable.
+Enable-over-synchronous-reset cells such as Yosys `$sdffce` are rejected; run `dffunmap` before
+TMRX if such cells are present.
+====
 
 == Error Detection Options
 

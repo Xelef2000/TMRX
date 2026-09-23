@@ -42,6 +42,14 @@ template <typename T> void applyIfPresent(T &dest, const std::optional<T> &src);
 std::string poolToString(const Yosys::pool<Yosys::RTLIL::IdString> &pool);
 std::string boolToString(bool val);
 
+struct FfPortConfig {
+    Yosys::RTLIL::IdString clockPort;
+    Yosys::RTLIL::IdString dataPort;
+    Yosys::RTLIL::IdString outputPort;
+    Yosys::RTLIL::IdString enablePort;
+    bool enableActiveHigh;
+};
+
 struct Config {
 
     TmrMode tmrMode;
@@ -61,6 +69,7 @@ struct Config {
 
     bool insertVoterBeforeFf;
     bool insertVoterAfterFf;
+    bool correctionFeedback;
 
     bool tmrModeFullModuleInsertVoterBeforeModules;
     bool tmrModeFullModuleInsertVoterAfterModules;
@@ -76,6 +85,7 @@ struct Config {
     Yosys::pool<Yosys::RTLIL::IdString> ffCells;
     Yosys::pool<Yosys::RTLIL::IdString> additionalFfCells;
     Yosys::pool<Yosys::RTLIL::IdString> excludedFfCells;
+    Yosys::dict<Yosys::RTLIL::IdString, FfPortConfig> ffPortMappings;
 
     std::string logicPath1Suffix;
     std::string logicPath2Suffix;
@@ -110,6 +120,7 @@ struct ConfigPart {
 
     std::optional<bool> insertVoterBeforeFf;
     std::optional<bool> insertVoterAfterFf;
+    std::optional<bool> correctionFeedback;
 
     std::optional<bool> tmrModeFullModuleInsertVoterBeforeModules;
     std::optional<bool> tmrModeFullModuleInsertVoterAfterModules;
@@ -125,6 +136,7 @@ struct ConfigPart {
     std::optional<Yosys::pool<Yosys::RTLIL::IdString>> ffCells;
     std::optional<Yosys::pool<Yosys::RTLIL::IdString>> additionalFfCells;
     std::optional<Yosys::pool<Yosys::RTLIL::IdString>> excludedFfCells;
+    std::optional<Yosys::dict<Yosys::RTLIL::IdString, FfPortConfig>> ffPortMappings;
 
     std::optional<std::string> logicPath1Suffix;
     std::optional<std::string> logicPath2Suffix;

@@ -1,0 +1,15 @@
+[global]
+tmr_mode = "LogicTMR"
+preserve_module_ports = true
+
+[global.logic]
+insert_voter_after_ff = true
+correction_feedback = true
+additional_ff_cells = ["MOCK_DFFE"]
+
+[global.logic.ff_port_mappings.MOCK_DFFE]
+clock_port = "CLK"
+data_port = "D"
+output_port = "Q"
+enable_port = "EN_N"
+enable_active_high = false

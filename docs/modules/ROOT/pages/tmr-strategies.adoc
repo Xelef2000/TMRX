@@ -33,6 +33,11 @@ single-event upset (SEU) in a register, but it does *not* protect against a sing
 The flip-flop detection settings in the `logic` configuration block (`ff_cells`,
 `additional_ff_cells`, and `excluded_ff_cells`) also apply to Register TMR.
 
+Both Logic TMR and Register TMR can enable `correction_feedback`. For clock-enabled FFs, an active
+enable loads the normal next-state value, while an inactive enable loads the majority-voted state.
+This repairs a single corrupted register lane on the next clock edge instead of allowing the lane to
+hold the corrupted value indefinitely.
+
 == Full Module TMR
 
 Full Module TMR creates a *wrapper module* containing three independent instances of the original module.

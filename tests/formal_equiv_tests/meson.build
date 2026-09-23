@@ -6,6 +6,7 @@ else
   subdir('simple_ff')
   subdir('counter_8bit')
   subdir('single_fault')
+  subdir('correction_feedback')
   subdir('eval_designs')
   subdir('config_complex')
   subdir('sub_module_tests')

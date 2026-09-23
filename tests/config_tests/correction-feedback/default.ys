@@ -1,0 +1,9 @@
+read_verilog top.v
+hierarchy -check -top top
+proc; opt
+tmrx_mark
+tmrx -c default.toml
+
+select -assert-count 3 top/t:$dffe
+select -assert-count 3 top/t:MOCK_DFFE
+select -assert-count 0 top/t:$mux
